@@ -1,47 +1,67 @@
 'use client';
 
-import { useMemo } from 'react';
 import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
+import { getCategoryTotal } from '@/lib/schemas';
 
 export default function DashboardPage() {
-  const { currentMonth, accounts, getMonthlyTransactions } = useLedgerStore();
-  const transactions = getMonthlyTransactions(currentMonth);
+  const {
+    currentMonth,
+    categories,
+    accounts,
+    getTotalIncome,
+    getTotalExpense,
+    getMonthlyData,
+  } = useLedgerStore();
 
-  const stats = useMemo(() => {
-    let income = 0;
-    let expense = 0;
+  const totalIncome = getTotalIncome(currentMonth);
+  const totalExpense = getTotalExpense(currentMonth);
+  const balance = totalIncome - totalExpense;
+  const monthlyData = getMonthlyData(currentMonth);
 
-    transactions.forEach((tx) => {
-      if (tx.type === 'income') {
-        income += tx.amount;
-      } else if (tx.type === 'expense') {
-        expense += tx.amount;
-      }
-    });
+  const totalBalance = accounts.accounts.reduce((sum, account) => {
+    return sum + account.initialBalance;
+  }, 0);
 
-    return {
-      income,
-      expense,
-      balance: income - expense,
-      transactionCount: transactions.length,
-    };
-  }, [transactions]);
+  // Get top expense categories
+  const topExpenses = Object.entries(monthlyData.expense)
+    .map(([categoryId, amount]) => {
+      const category = categories.categories.expense.find((c) => c.id === categoryId);
+      return {
+        id: categoryId,
+        name: category?.name || categoryId,
+        color: category?.color || '#6B7280',
+        amount: getCategoryTotal(amount),
+      };
+    })
+    .filter((item) => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
 
-  const totalBalance = useMemo(() => {
-    return accounts.accounts.reduce((sum, account) => {
-      return sum + account.initialBalance;
-    }, 0);
-  }, [accounts]);
+  // Get top income categories
+  const topIncomes = Object.entries(monthlyData.income)
+    .map(([categoryId, amount]) => {
+      const category = categories.categories.income.find((c) => c.id === categoryId);
+      return {
+        id: categoryId,
+        name: category?.name || categoryId,
+        color: category?.color || '#6B7280',
+        amount: getCategoryTotal(amount),
+      };
+    })
+    .filter((item) => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
 
   return (
     <div className="flex flex-col h-full">
       <Header title="ダッシュボード" />
 
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-6 space-y-6 overflow-auto">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -50,7 +70,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(stats.income)}
+                {formatCurrency(totalIncome)}
               </div>
               <p className="text-xs text-muted-foreground">今月の総収入</p>
             </CardContent>
@@ -63,7 +83,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(stats.expense)}
+                {formatCurrency(totalExpense)}
               </div>
               <p className="text-xs text-muted-foreground">今月の総支出</p>
             </CardContent>
@@ -77,10 +97,10 @@ export default function DashboardPage() {
             <CardContent>
               <div
                 className={`text-2xl font-bold ${
-                  stats.balance >= 0 ? 'text-blue-600' : 'text-red-600'
+                  balance >= 0 ? 'text-blue-600' : 'text-red-600'
                 }`}
               >
-                {formatCurrency(stats.balance)}
+                {balance >= 0 ? '+' : ''}{formatCurrency(balance)}
               </div>
               <p className="text-xs text-muted-foreground">収入 - 支出</p>
             </CardContent>
@@ -100,38 +120,59 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>最近の取引</CardTitle>
+              <CardTitle className="text-red-600">支出推移</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                過去6ヶ月のカテゴリ別支出
+              </p>
             </CardHeader>
             <CardContent>
-              {transactions.length === 0 ? (
+              <StackedAreaChart type="expense" months={6} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-green-600">収入推移</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                過去6ヶ月のカテゴリ別収入
+              </p>
+            </CardHeader>
+            <CardContent>
+              <StackedAreaChart type="income" months={6} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>支出内訳</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topExpenses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  取引がありません。データフォルダを開いてください。
+                  支出データがありません
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {transactions.slice(-5).reverse().map((tx) => (
+                  {topExpenses.map((item) => (
                     <div
-                      key={tx.id}
+                      key={item.id}
                       className="flex items-center justify-between"
                     >
-                      <div>
-                        <p className="text-sm font-medium">{tx.description || tx.category}</p>
-                        <p className="text-xs text-muted-foreground">{tx.date}</p>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <p className="text-sm font-medium">{item.name}</p>
                       </div>
-                      <div
-                        className={`text-sm font-medium ${
-                          tx.type === 'income'
-                            ? 'text-green-600'
-                            : tx.type === 'expense'
-                            ? 'text-red-600'
-                            : 'text-gray-600'
-                        }`}
-                      >
-                        {tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : ''}
-                        {formatCurrency(tx.amount)}
+                      <div className="text-sm font-medium text-red-600">
+                        -{formatCurrency(item.amount)}
                       </div>
                     </div>
                   ))}
@@ -142,6 +183,39 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
+              <CardTitle>収入内訳</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topIncomes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  収入データがありません
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {topIncomes.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <p className="text-sm font-medium">{item.name}</p>
+                      </div>
+                      <div className="text-sm font-medium text-green-600">
+                        +{formatCurrency(item.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="md:col-span-2">
+            <CardHeader>
               <CardTitle>口座残高</CardTitle>
             </CardHeader>
             <CardContent>
@@ -150,11 +224,11 @@ export default function DashboardPage() {
                   口座がありません。データフォルダを開いてください。
                 </p>
               ) : (
-                <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {accounts.accounts.map((account) => (
                     <div
                       key={account.id}
-                      className="flex items-center justify-between"
+                      className="flex items-center justify-between p-3 border rounded-lg"
                     >
                       <div className="flex items-center gap-2">
                         <div

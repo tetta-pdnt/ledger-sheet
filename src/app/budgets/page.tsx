@@ -58,7 +58,7 @@ export default function BudgetsPage() {
             <div className="space-y-4">
               {expenseCategories.map((category) => {
                 const budget = getBudgetForCategory(category.id, currentMonth);
-                const spent = getCategoryTotal(category.id, currentMonth);
+                const spent = getCategoryTotal('expense', category.id, currentMonth);
                 const percentage = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
                 const remaining = budget - spent;
                 const isOverBudget = spent > budget && budget > 0;

@@ -1,4 +1,5 @@
-import type { Transaction, Account, Category } from '@/lib/schemas';
+import type { Account, Category, MonthlyData, AccountsData } from '@/lib/schemas';
+import { getCategoryTotal } from '@/lib/schemas';
 
 export interface SankeyNode {
   id: string;
@@ -19,13 +20,20 @@ export interface SankeyData {
 }
 
 export function transformToSankeyData(
-  transactions: Transaction[],
-  accounts: Account[],
+  monthlyData: MonthlyData,
+  accountsData: AccountsData,
   incomeCategories: Category[],
   expenseCategories: Category[]
 ): SankeyData {
   const nodes: SankeyNode[] = [];
   const linksMap = new Map<string, number>();
+
+  const accounts = accountsData.accounts;
+  const flowRules = accountsData.flowRules;
+
+  // Find default account
+  const defaultAccount = accounts.find((a) => a.isDefault) || accounts[0];
+  const defaultAccountId = defaultAccount?.id;
 
   // Add income category nodes
   incomeCategories.forEach((cat) => {
@@ -57,17 +65,41 @@ export function transformToSankeyData(
     });
   });
 
-  // Process transactions to create links
-  transactions.forEach((tx) => {
-    if (tx.type === 'income' && tx.toAccount) {
-      const linkKey = `income-${tx.category}|account-${tx.toAccount}`;
-      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + tx.amount);
-    } else if (tx.type === 'expense' && tx.fromAccount) {
-      const linkKey = `account-${tx.fromAccount}|expense-${tx.category}`;
-      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + tx.amount);
-    } else if (tx.type === 'transfer' && tx.fromAccount && tx.toAccount) {
-      const linkKey = `account-${tx.fromAccount}|account-${tx.toAccount}`;
-      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + tx.amount);
+  // Process income data to create links (income category -> account)
+  Object.entries(monthlyData.income).forEach(([categoryId, amount]) => {
+    const total = getCategoryTotal(amount);
+    if (total <= 0) return;
+
+    // Get target account from flow rules, or use default
+    const rule = flowRules.income[categoryId];
+    const targetAccountId = rule?.toAccount || defaultAccountId;
+
+    if (targetAccountId) {
+      const linkKey = `income-${categoryId}|account-${targetAccountId}`;
+      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + total);
+    }
+  });
+
+  // Process expense data to create links (account -> expense category)
+  Object.entries(monthlyData.expense).forEach(([categoryId, amount]) => {
+    const total = getCategoryTotal(amount);
+    if (total <= 0) return;
+
+    // Get source account from flow rules, or use default
+    const rule = flowRules.expense[categoryId];
+    const sourceAccountId = rule?.fromAccount || defaultAccountId;
+
+    if (sourceAccountId) {
+      const linkKey = `account-${sourceAccountId}|expense-${categoryId}`;
+      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + total);
+    }
+  });
+
+  // Process transfers (account -> account)
+  monthlyData.transfers.forEach((transfer) => {
+    if (transfer.amount > 0) {
+      const linkKey = `account-${transfer.from}|account-${transfer.to}`;
+      linksMap.set(linkKey, (linksMap.get(linkKey) || 0) + transfer.amount);
     }
   });
 

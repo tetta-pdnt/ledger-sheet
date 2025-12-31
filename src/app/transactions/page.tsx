@@ -1,183 +1,442 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { TransactionForm } from '@/components/transactions/transaction-form';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
-import type { Transaction } from '@/lib/schemas';
+import { getCategoryTotal } from '@/lib/schemas';
+import type { Category, CategoryAmount, Transfer } from '@/lib/schemas';
 
-export default function TransactionsPage() {
-  const { currentMonth, categories, accounts, getMonthlyTransactions, deleteTransaction } =
-    useLedgerStore();
-  const transactions = getMonthlyTransactions(currentMonth);
+interface CategoryInputProps {
+  category: Category;
+  type: 'income' | 'expense';
+  value: CategoryAmount | undefined;
+  onChange: (amount: CategoryAmount) => void;
+}
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>();
+function CategoryInput({ category, type, value, onChange }: CategoryInputProps) {
+  const [expanded, setExpanded] = useState(false);
+  const hasSubcategories = category.subcategories.length > 0;
 
-  const getCategoryName = (categoryId: string, type: string) => {
-    const list =
-      type === 'income'
-        ? categories.categories.income
-        : type === 'expense'
-        ? categories.categories.expense
-        : categories.categories.transfer;
-    return list.find((c) => c.id === categoryId)?.name || categoryId;
+  // Determine if value is a breakdown (object) or simple number
+  const isBreakdown = value !== undefined && typeof value === 'object';
+  const total = value ? getCategoryTotal(value) : 0;
+
+  const handleTotalChange = (newTotal: string) => {
+    const numValue = parseFloat(newTotal) || 0;
+    if (hasSubcategories && isBreakdown) {
+      // Keep breakdown structure but scale proportionally
+      const currentTotal = total || 1;
+      const scale = numValue / currentTotal;
+      const newBreakdown: Record<string, number> = {};
+      for (const [key, val] of Object.entries(value as Record<string, number>)) {
+        newBreakdown[key] = Math.round(val * scale);
+      }
+      onChange(newBreakdown);
+    } else {
+      onChange(numValue);
+    }
   };
 
-  const getAccountName = (accountId: string | undefined) => {
-    if (!accountId) return '-';
+  const handleSubcategoryChange = (subcatId: string, amount: string) => {
+    const numValue = parseFloat(amount) || 0;
+    const currentBreakdown = isBreakdown ? (value as Record<string, number>) : {};
+    const newBreakdown = {
+      ...currentBreakdown,
+      [subcatId]: numValue,
+    };
+    // Remove zero values
+    if (numValue === 0) {
+      delete newBreakdown[subcatId];
+    }
+    // If all zero, set to 0
+    if (Object.keys(newBreakdown).length === 0) {
+      onChange(0);
+    } else {
+      onChange(newBreakdown);
+    }
+  };
+
+  const toggleExpand = () => {
+    if (!expanded && !isBreakdown && hasSubcategories) {
+      // When expanding with a simple number, convert to breakdown
+      const breakdown: Record<string, number> = {};
+      if (total > 0) {
+        // Put all in first subcategory by default
+        breakdown[category.subcategories[0].id] = total;
+      }
+      onChange(breakdown);
+    }
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div className="border rounded-lg p-3">
+      <div className="flex items-center gap-3">
+        {hasSubcategories ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={toggleExpand}
+          >
+            {expanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        ) : (
+          <div className="w-6" />
+        )}
+        <div
+          className="w-3 h-3 rounded-full"
+          style={{ backgroundColor: category.color }}
+        />
+        <span className="flex-1 font-medium">{category.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">¥</span>
+          <Input
+            type="number"
+            className="w-32 text-right"
+            value={total || ''}
+            onChange={(e) => handleTotalChange(e.target.value)}
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      {expanded && hasSubcategories && (
+        <div className="mt-3 ml-9 space-y-2 border-l-2 pl-4">
+          {category.subcategories.map((subcat) => {
+            const subcatValue = isBreakdown
+              ? (value as Record<string, number>)[subcat.id] || 0
+              : 0;
+            return (
+              <div key={subcat.id} className="flex items-center gap-3">
+                <span className="flex-1 text-sm text-muted-foreground">
+                  {subcat.name}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">¥</span>
+                  <Input
+                    type="number"
+                    className="w-28 text-right text-sm"
+                    value={subcatValue || ''}
+                    onChange={(e) => handleSubcategoryChange(subcat.id, e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TransactionsPage() {
+  const {
+    currentMonth,
+    categories,
+    accounts,
+    getMonthlyData,
+    setIncome,
+    setExpense,
+    addTransfer,
+    removeTransfer,
+    getTotalIncome,
+    getTotalExpense,
+  } = useLedgerStore();
+
+  const monthlyData = getMonthlyData(currentMonth);
+  const totalIncome = getTotalIncome(currentMonth);
+  const totalExpense = getTotalExpense(currentMonth);
+  const balance = totalIncome - totalExpense;
+
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
+    from: '',
+    to: '',
+    amount: 0,
+    note: '',
+  });
+
+  const handleAddTransfer = () => {
+    if (newTransfer.from && newTransfer.to && newTransfer.amount && newTransfer.amount > 0) {
+      addTransfer({
+        from: newTransfer.from,
+        to: newTransfer.to,
+        amount: newTransfer.amount,
+        note: newTransfer.note,
+      });
+      setNewTransfer({ from: '', to: '', amount: 0, note: '' });
+      setTransferDialogOpen(false);
+    }
+  };
+
+  const getAccountName = (accountId: string) => {
     return accounts.accounts.find((a) => a.id === accountId)?.name || accountId;
   };
 
-  const handleEdit = (tx: Transaction) => {
-    setEditingTransaction(tx);
-    setFormOpen(true);
-  };
-
-  const handleDelete = (txId: string) => {
-    if (confirm('この取引を削除しますか？')) {
-      deleteTransaction(txId);
-    }
-  };
-
-  const handleFormClose = (open: boolean) => {
-    setFormOpen(open);
-    if (!open) {
-      setEditingTransaction(undefined);
-    }
-  };
-
-  const sortedTransactions = [...transactions].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
   return (
     <div className="flex flex-col h-full">
-      <Header title="取引" />
+      <Header title="月次収支" />
 
-      <div className="flex-1 p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <p className="text-sm text-muted-foreground">
-            {transactions.length} 件の取引
-          </p>
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            新規取引
-          </Button>
+      <div className="flex-1 p-6 space-y-6 overflow-auto">
+        {/* Summary */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                収入合計
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-green-600">
+                +{formatCurrency(totalIncome)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                支出合計
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-red-600">
+                -{formatCurrency(totalExpense)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                収支
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p
+                className={`text-2xl font-bold ${
+                  balance >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {balance >= 0 ? '+' : ''}
+                {formatCurrency(balance)}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
+        <div className="grid grid-cols-2 gap-6">
+          {/* Income */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+                収入
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {categories.categories.income.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  収入カテゴリがありません
+                </p>
+              ) : (
+                categories.categories.income.map((category) => (
+                  <CategoryInput
+                    key={category.id}
+                    category={category}
+                    type="income"
+                    value={monthlyData.income[category.id]}
+                    onChange={(amount) => setIncome(category.id, amount)}
+                  />
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Expense */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                支出
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {categories.categories.expense.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  支出カテゴリがありません
+                </p>
+              ) : (
+                categories.categories.expense.map((category) => (
+                  <CategoryInput
+                    key={category.id}
+                    category={category}
+                    type="expense"
+                    value={monthlyData.expense[category.id]}
+                    onChange={(amount) => setExpense(category.id, amount)}
+                  />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Transfers */}
         <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>日付</TableHead>
-                  <TableHead>種類</TableHead>
-                  <TableHead>カテゴリ</TableHead>
-                  <TableHead>説明</TableHead>
-                  <TableHead>口座</TableHead>
-                  <TableHead className="text-right">金額</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedTransactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      取引がありません
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  sortedTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>{tx.date}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            tx.type === 'income'
-                              ? 'default'
-                              : tx.type === 'expense'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                        >
-                          {tx.type === 'income'
-                            ? '収入'
-                            : tx.type === 'expense'
-                            ? '支出'
-                            : '振替'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{getCategoryName(tx.category, tx.type)}</TableCell>
-                      <TableCell>{tx.description || '-'}</TableCell>
-                      <TableCell>
-                        {tx.type === 'transfer' ? (
-                          <span>
-                            {getAccountName(tx.fromAccount)} → {getAccountName(tx.toAccount)}
-                          </span>
-                        ) : tx.type === 'income' ? (
-                          getAccountName(tx.toAccount)
-                        ) : (
-                          getAccountName(tx.fromAccount)
-                        )}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-medium ${
-                          tx.type === 'income'
-                            ? 'text-green-600'
-                            : tx.type === 'expense'
-                            ? 'text-red-600'
-                            : ''
-                        }`}
-                      >
-                        {tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : ''}
-                        {formatCurrency(tx.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(tx)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(tx.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              振替
+            </CardTitle>
+            <Button size="sm" onClick={() => setTransferDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              追加
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {monthlyData.transfers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                振替がありません
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {monthlyData.transfers.map((transfer, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 p-3 border rounded-lg"
+                  >
+                    <span className="font-medium">{getAccountName(transfer.from)}</span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{getAccountName(transfer.to)}</span>
+                    <span className="flex-1 text-sm text-muted-foreground">
+                      {transfer.note}
+                    </span>
+                    <span className="font-medium">{formatCurrency(transfer.amount)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (confirm('この振替を削除しますか？')) {
+                          removeTransfer(index);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <TransactionForm
-        open={formOpen}
-        onOpenChange={handleFormClose}
-        transaction={editingTransaction}
-      />
+      {/* Transfer Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>振替を追加</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>振替元</Label>
+              <Select
+                value={newTransfer.from}
+                onValueChange={(value) =>
+                  setNewTransfer((prev) => ({ ...prev, from: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="口座を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>振替先</Label>
+              <Select
+                value={newTransfer.to}
+                onValueChange={(value) =>
+                  setNewTransfer((prev) => ({ ...prev, to: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="口座を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.accounts
+                    .filter((a) => a.id !== newTransfer.from)
+                    .map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>金額</Label>
+              <Input
+                type="number"
+                value={newTransfer.amount || ''}
+                onChange={(e) =>
+                  setNewTransfer((prev) => ({
+                    ...prev,
+                    amount: parseFloat(e.target.value) || 0,
+                  }))
+                }
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>メモ</Label>
+              <Input
+                value={newTransfer.note || ''}
+                onChange={(e) =>
+                  setNewTransfer((prev) => ({ ...prev, note: e.target.value }))
+                }
+                placeholder="任意"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleAddTransfer}>追加</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

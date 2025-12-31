@@ -11,6 +11,7 @@ import {
   GitGraph,
   Settings,
   FolderOpen,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { useLedgerStore } from '@/lib/store';
 const navigation = [
   { name: 'ダッシュボード', href: '/', icon: LayoutDashboard },
   { name: '取引', href: '/transactions', icon: Receipt },
+  { name: '定期項目', href: '/recurrings', icon: RefreshCw },
   { name: 'カテゴリ', href: '/categories', icon: Tags },
   { name: '口座', href: '/accounts', icon: Wallet },
   { name: '予算', href: '/budgets', icon: PiggyBank },

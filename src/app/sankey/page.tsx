@@ -8,8 +8,8 @@ import { useLedgerStore } from '@/lib/store';
 import { transformToSankeyData } from '@/lib/sankey';
 
 export default function SankeyPage() {
-  const { currentMonth, categories, accounts, getMonthlyTransactions } = useLedgerStore();
-  const transactions = getMonthlyTransactions(currentMonth);
+  const { currentMonth, categories, accounts, getMonthlyData } = useLedgerStore();
+  const monthlyData = getMonthlyData(currentMonth);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -32,12 +32,12 @@ export default function SankeyPage() {
 
   const sankeyData = useMemo(() => {
     return transformToSankeyData(
-      transactions,
-      accounts.accounts,
+      monthlyData,
+      accounts,
       categories.categories.income,
       categories.categories.expense
     );
-  }, [transactions, accounts.accounts, categories.categories]);
+  }, [monthlyData, accounts, categories.categories]);
 
   return (
     <div className="flex flex-col h-full">

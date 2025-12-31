@@ -7,27 +7,30 @@ import {
   writeFile,
   readFileFromSubdir,
   writeFileToSubdir,
-  listFilesInSubdir,
   openDirectory,
-  getDirectoryHandle,
-  setDirectoryHandle,
   clearHandles,
 } from '@/lib/file-system';
 import { parseYaml, stringifyYaml, clearAllYamlCache } from '@/lib/file-system/yaml-parser';
 import {
   categoriesDataSchema,
   accountsDataSchema,
-  monthlyTransactionsSchema,
+  monthlyDataSchema,
   budgetsDataSchema,
+  recurringsDataSchema,
   settingsDataSchema,
+  getCategoryTotal as getAmountTotal,
   type CategoriesData,
   type AccountsData,
-  type MonthlyTransactions,
+  type MonthlyData,
   type BudgetsData,
+  type RecurringsData,
+  type Recurring,
+  type RecurringTransfer,
   type SettingsData,
-  type Transaction,
   type Category,
   type Account,
+  type CategoryAmount,
+  type Transfer,
 } from '@/lib/schemas';
 
 // Default data
@@ -144,6 +147,12 @@ const defaultBudgets: BudgetsData = {
   ],
 };
 
+const defaultRecurrings: RecurringsData = {
+  version: 1,
+  items: [],
+  transfers: [],
+};
+
 const defaultSettings: SettingsData = {
   version: 1,
   locale: 'ja-JP',
@@ -175,8 +184,9 @@ interface LedgerState {
   // Data
   categories: CategoriesData;
   accounts: AccountsData;
-  transactions: Map<string, MonthlyTransactions>;
+  monthlyData: Map<string, MonthlyData>;
   budgets: BudgetsData;
+  recurrings: RecurringsData;
   settings: SettingsData;
 
   // Actions - File operations
@@ -184,8 +194,9 @@ interface LedgerState {
   loadAllData: () => Promise<void>;
   saveCategories: () => Promise<void>;
   saveAccounts: () => Promise<void>;
-  saveTransactions: (month: string) => Promise<void>;
+  saveMonthlyData: (month: string) => Promise<void>;
   saveBudgets: () => Promise<void>;
+  saveRecurrings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 
   // Actions - Month navigation
@@ -201,23 +212,42 @@ interface LedgerState {
   updateAccount: (accountId: string, updates: Partial<Account>) => void;
   deleteAccount: (accountId: string) => void;
 
-  // Actions - Transactions
-  addTransaction: (transaction: Transaction) => void;
-  updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
-  deleteTransaction: (transactionId: string) => void;
+  // Actions - Monthly Data
+  setIncome: (categoryId: string, amount: CategoryAmount) => void;
+  setExpense: (categoryId: string, amount: CategoryAmount) => void;
+  addTransfer: (transfer: Transfer) => void;
+  removeTransfer: (index: number) => void;
 
   // Actions - Budgets
   setBudget: (categoryId: string, amount: number, month?: string) => void;
 
+  // Actions - Recurrings
+  addRecurring: (recurring: Recurring) => void;
+  updateRecurring: (id: string, updates: Partial<Recurring>) => void;
+  deleteRecurring: (id: string) => void;
+  addRecurringTransfer: (transfer: RecurringTransfer) => void;
+  updateRecurringTransfer: (id: string, updates: Partial<RecurringTransfer>) => void;
+  deleteRecurringTransfer: (id: string) => void;
+  applyRecurrings: (month: string) => void;
+
   // Computed values
-  getMonthlyTransactions: (month: string) => Transaction[];
-  getAccountBalance: (accountId: string, upToDate?: Date) => number;
-  getCategoryTotal: (categoryId: string, month: string) => number;
+  getMonthlyData: (month: string) => MonthlyData;
+  getTotalIncome: (month: string) => number;
+  getTotalExpense: (month: string) => number;
+  getCategoryTotal: (type: 'income' | 'expense', categoryId: string, month: string) => number;
   getBudgetForCategory: (categoryId: string, month: string) => number;
 
   // Reset
   reset: () => void;
 }
+
+const emptyMonthlyData = (month: string): MonthlyData => ({
+  version: 1,
+  month,
+  income: {},
+  expense: {},
+  transfers: [],
+});
 
 export const useLedgerStore = create<LedgerState>((set, get) => ({
   // Initial state
@@ -227,8 +257,9 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
   currentMonth: format(new Date(), 'yyyy-MM'),
   categories: defaultCategories,
   accounts: defaultAccounts,
-  transactions: new Map(),
+  monthlyData: new Map(),
   budgets: defaultBudgets,
+  recurrings: defaultRecurrings,
   settings: defaultSettings,
 
   // Open data directory
@@ -272,6 +303,14 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         set({ budgets: validated });
       }
 
+      // Load recurrings
+      const recurringsContent = await readFile('recurrings.yaml');
+      if (recurringsContent) {
+        const parsed = parseYaml<RecurringsData>(recurringsContent, 'recurrings');
+        const validated = recurringsDataSchema.parse(parsed);
+        set({ recurrings: validated });
+      }
+
       // Load settings
       const settingsContent = await readFile('settings.yaml');
       if (settingsContent) {
@@ -280,15 +319,15 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         set({ settings: validated });
       }
 
-      // Load current month's transactions
+      // Load current month's data
       const { currentMonth } = get();
-      const txContent = await readFileFromSubdir('transactions', `${currentMonth}.yaml`);
-      if (txContent) {
-        const parsed = parseYaml<MonthlyTransactions>(txContent, `transactions-${currentMonth}`);
-        const validated = monthlyTransactionsSchema.parse(parsed);
-        const transactions = new Map(get().transactions);
-        transactions.set(currentMonth, validated);
-        set({ transactions });
+      const dataContent = await readFileFromSubdir('transactions', `${currentMonth}.yaml`);
+      if (dataContent) {
+        const parsed = parseYaml<MonthlyData>(dataContent, `data-${currentMonth}`);
+        const validated = monthlyDataSchema.parse(parsed);
+        const newMonthlyData = new Map(get().monthlyData);
+        newMonthlyData.set(currentMonth, validated);
+        set({ monthlyData: newMonthlyData });
       }
 
       set({ isLoading: false, isLoaded: true });
@@ -311,12 +350,12 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     await writeFile('accounts.yaml', content);
   },
 
-  // Save transactions for a specific month
-  saveTransactions: async (month: string) => {
-    const { transactions } = get();
-    const monthData = transactions.get(month);
-    if (monthData) {
-      const content = stringifyYaml(monthData, `transactions-${month}`);
+  // Save monthly data
+  saveMonthlyData: async (month: string) => {
+    const { monthlyData } = get();
+    const data = monthlyData.get(month);
+    if (data) {
+      const content = stringifyYaml(data, `data-${month}`);
       await writeFileToSubdir('transactions', `${month}.yaml`, content);
     }
   },
@@ -326,6 +365,13 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     const { budgets } = get();
     const content = stringifyYaml(budgets, 'budgets');
     await writeFile('budgets.yaml', content);
+  },
+
+  // Save recurrings
+  saveRecurrings: async () => {
+    const { recurrings } = get();
+    const content = stringifyYaml(recurrings, 'recurrings');
+    await writeFile('recurrings.yaml', content);
   },
 
   // Save settings
@@ -339,20 +385,20 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
   setCurrentMonth: async (month: string) => {
     set({ currentMonth: month });
 
-    // Load transactions for the new month if not already loaded
-    const { transactions } = get();
-    if (!transactions.has(month)) {
+    // Load data for the new month if not already loaded
+    const { monthlyData } = get();
+    if (!monthlyData.has(month)) {
       try {
-        const txContent = await readFileFromSubdir('transactions', `${month}.yaml`);
-        if (txContent) {
-          const parsed = parseYaml<MonthlyTransactions>(txContent, `transactions-${month}`);
-          const validated = monthlyTransactionsSchema.parse(parsed);
-          const newTransactions = new Map(transactions);
-          newTransactions.set(month, validated);
-          set({ transactions: newTransactions });
+        const dataContent = await readFileFromSubdir('transactions', `${month}.yaml`);
+        if (dataContent) {
+          const parsed = parseYaml<MonthlyData>(dataContent, `data-${month}`);
+          const validated = monthlyDataSchema.parse(parsed);
+          const newMonthlyData = new Map(monthlyData);
+          newMonthlyData.set(month, validated);
+          set({ monthlyData: newMonthlyData });
         }
       } catch {
-        // No transactions for this month yet
+        // No data for this month yet
       }
     }
   },
@@ -436,61 +482,75 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     get().saveAccounts();
   },
 
-  // Add transaction
-  addTransaction: (transaction) => {
-    const month = transaction.date.substring(0, 7);
-    const { transactions } = get();
-    const monthData = transactions.get(month) || {
-      version: 1,
-      month,
-      transactions: [],
+  // Set income for a category
+  setIncome: (categoryId, amount) => {
+    const { currentMonth, monthlyData } = get();
+    const data = monthlyData.get(currentMonth) || emptyMonthlyData(currentMonth);
+
+    const updated: MonthlyData = {
+      ...data,
+      income: {
+        ...data.income,
+        [categoryId]: amount,
+      },
     };
 
-    const updatedMonthData = {
-      ...monthData,
-      transactions: [...monthData.transactions, transaction],
-    };
-
-    const newTransactions = new Map(transactions);
-    newTransactions.set(month, updatedMonthData);
-    set({ transactions: newTransactions });
-    get().saveTransactions(month);
+    const newMonthlyData = new Map(monthlyData);
+    newMonthlyData.set(currentMonth, updated);
+    set({ monthlyData: newMonthlyData });
+    get().saveMonthlyData(currentMonth);
   },
 
-  // Update transaction
-  updateTransaction: (transactionId, updates) => {
-    const { transactions, currentMonth } = get();
-    const monthData = transactions.get(currentMonth);
-    if (!monthData) return;
+  // Set expense for a category
+  setExpense: (categoryId, amount) => {
+    const { currentMonth, monthlyData } = get();
+    const data = monthlyData.get(currentMonth) || emptyMonthlyData(currentMonth);
 
-    const updatedMonthData = {
-      ...monthData,
-      transactions: monthData.transactions.map((tx) =>
-        tx.id === transactionId ? { ...tx, ...updates } : tx
-      ),
+    const updated: MonthlyData = {
+      ...data,
+      expense: {
+        ...data.expense,
+        [categoryId]: amount,
+      },
     };
 
-    const newTransactions = new Map(transactions);
-    newTransactions.set(currentMonth, updatedMonthData);
-    set({ transactions: newTransactions });
-    get().saveTransactions(currentMonth);
+    const newMonthlyData = new Map(monthlyData);
+    newMonthlyData.set(currentMonth, updated);
+    set({ monthlyData: newMonthlyData });
+    get().saveMonthlyData(currentMonth);
   },
 
-  // Delete transaction
-  deleteTransaction: (transactionId) => {
-    const { transactions, currentMonth } = get();
-    const monthData = transactions.get(currentMonth);
-    if (!monthData) return;
+  // Add transfer
+  addTransfer: (transfer) => {
+    const { currentMonth, monthlyData } = get();
+    const data = monthlyData.get(currentMonth) || emptyMonthlyData(currentMonth);
 
-    const updatedMonthData = {
-      ...monthData,
-      transactions: monthData.transactions.filter((tx) => tx.id !== transactionId),
+    const updated: MonthlyData = {
+      ...data,
+      transfers: [...data.transfers, transfer],
     };
 
-    const newTransactions = new Map(transactions);
-    newTransactions.set(currentMonth, updatedMonthData);
-    set({ transactions: newTransactions });
-    get().saveTransactions(currentMonth);
+    const newMonthlyData = new Map(monthlyData);
+    newMonthlyData.set(currentMonth, updated);
+    set({ monthlyData: newMonthlyData });
+    get().saveMonthlyData(currentMonth);
+  },
+
+  // Remove transfer
+  removeTransfer: (index) => {
+    const { currentMonth, monthlyData } = get();
+    const data = monthlyData.get(currentMonth);
+    if (!data) return;
+
+    const updated: MonthlyData = {
+      ...data,
+      transfers: data.transfers.filter((_, i) => i !== index),
+    };
+
+    const newMonthlyData = new Map(monthlyData);
+    newMonthlyData.set(currentMonth, updated);
+    set({ monthlyData: newMonthlyData });
+    get().saveMonthlyData(currentMonth);
   },
 
   // Set budget
@@ -522,48 +582,150 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     get().saveBudgets();
   },
 
-  // Get monthly transactions
-  getMonthlyTransactions: (month) => {
-    const { transactions } = get();
-    const monthData = transactions.get(month);
-    return monthData?.transactions || [];
+  // Add recurring
+  addRecurring: (recurring) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      items: [...recurrings.items, recurring],
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
   },
 
-  // Get account balance
-  getAccountBalance: (accountId, upToDate) => {
-    const { accounts, transactions } = get();
-    const account = accounts.accounts.find((a) => a.id === accountId);
-    if (!account) return 0;
+  // Update recurring
+  updateRecurring: (id, updates) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      items: recurrings.items.map((item) =>
+        item.id === id ? { ...item, ...updates } : item
+      ),
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
+  },
 
-    let balance = account.initialBalance;
-    const targetDate = upToDate || new Date();
+  // Delete recurring
+  deleteRecurring: (id) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      items: recurrings.items.filter((item) => item.id !== id),
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
+  },
 
-    transactions.forEach((monthData) => {
-      monthData.transactions.forEach((tx) => {
-        const txDate = new Date(tx.date);
-        if (txDate <= targetDate) {
-          if (tx.toAccount === accountId) {
-            balance += tx.amount;
-          }
-          if (tx.fromAccount === accountId) {
-            balance -= tx.amount;
-          }
-        }
+  // Add recurring transfer
+  addRecurringTransfer: (transfer) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      transfers: [...recurrings.transfers, transfer],
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
+  },
+
+  // Update recurring transfer
+  updateRecurringTransfer: (id, updates) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      transfers: recurrings.transfers.map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
+  },
+
+  // Delete recurring transfer
+  deleteRecurringTransfer: (id) => {
+    const { recurrings } = get();
+    const updated = {
+      ...recurrings,
+      transfers: recurrings.transfers.filter((t) => t.id !== id),
+    };
+    set({ recurrings: updated });
+    get().saveRecurrings();
+  },
+
+  // Apply recurrings to a month
+  applyRecurrings: (month) => {
+    const { recurrings, monthlyData } = get();
+    const data = monthlyData.get(month) || emptyMonthlyData(month);
+
+    // Apply income/expense recurrings
+    let updatedIncome = { ...data.income };
+    let updatedExpense = { ...data.expense };
+
+    for (const item of recurrings.items) {
+      if (!item.enabled) continue;
+
+      if (item.type === 'income') {
+        updatedIncome = {
+          ...updatedIncome,
+          [item.categoryId]: item.amount,
+        };
+      } else {
+        updatedExpense = {
+          ...updatedExpense,
+          [item.categoryId]: item.amount,
+        };
+      }
+    }
+
+    // Apply recurring transfers
+    const updatedTransfers = [...data.transfers];
+    for (const t of recurrings.transfers) {
+      if (!t.enabled) continue;
+      updatedTransfers.push({
+        from: t.from,
+        to: t.to,
+        amount: t.amount,
+        note: t.note,
       });
-    });
+    }
 
-    return balance;
+    const updated: MonthlyData = {
+      ...data,
+      income: updatedIncome,
+      expense: updatedExpense,
+      transfers: updatedTransfers,
+    };
+
+    const newMonthlyData = new Map(monthlyData);
+    newMonthlyData.set(month, updated);
+    set({ monthlyData: newMonthlyData });
+    get().saveMonthlyData(month);
   },
 
-  // Get category total for a month
-  getCategoryTotal: (categoryId, month) => {
-    const { transactions } = get();
-    const monthData = transactions.get(month);
-    if (!monthData) return 0;
+  // Get monthly data
+  getMonthlyData: (month) => {
+    const { monthlyData } = get();
+    return monthlyData.get(month) || emptyMonthlyData(month);
+  },
 
-    return monthData.transactions
-      .filter((tx) => tx.category === categoryId)
-      .reduce((sum, tx) => sum + tx.amount, 0);
+  // Get total income for a month
+  getTotalIncome: (month: string): number => {
+    const data = get().getMonthlyData(month);
+    return Object.values(data.income).reduce<number>((sum, amount) => sum + getAmountTotal(amount), 0);
+  },
+
+  // Get total expense for a month
+  getTotalExpense: (month: string): number => {
+    const data = get().getMonthlyData(month);
+    return Object.values(data.expense).reduce<number>((sum, amount) => sum + getAmountTotal(amount), 0);
+  },
+
+  // Get category total
+  getCategoryTotal: (type, categoryId, month) => {
+    const data = get().getMonthlyData(month);
+    const amounts = type === 'income' ? data.income : data.expense;
+    const amount = amounts[categoryId];
+    return amount ? getAmountTotal(amount) : 0;
   },
 
   // Get budget for category
@@ -593,8 +755,9 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       currentMonth: format(new Date(), 'yyyy-MM'),
       categories: defaultCategories,
       accounts: defaultAccounts,
-      transactions: new Map(),
+      monthlyData: new Map(),
       budgets: defaultBudgets,
+      recurrings: defaultRecurrings,
       settings: defaultSettings,
     });
   },

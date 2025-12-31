@@ -60,30 +60,28 @@ export const accountsDataSchema = z.object({
   flowRules: flowRulesSchema.default({ income: {}, expense: {} }),
 });
 
-// Transaction type schema
-export const transactionTypeSchema = z.enum(['income', 'expense', 'transfer']);
+// Category amount - either a number or subcategory breakdown
+// e.g., food: 45000 or food: { groceries: 30000, restaurants: 15000 }
+export const categoryAmountSchema = z.union([
+  z.number().nonnegative(),
+  z.record(z.string(), z.number().nonnegative()),
+]);
 
-// Transaction schema
-export const transactionSchema = z.object({
-  id: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  type: transactionTypeSchema,
-  category: z.string().min(1),
-  subcategory: z.string().optional(),
+// Transfer record
+export const transferSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
   amount: z.number().positive(),
-  fromAccount: z.string().optional(),
-  toAccount: z.string().optional(),
-  description: z.string().default(''),
-  tags: z.array(z.string()).optional(),
-  memo: z.string().optional(),
-  isRecurring: z.boolean().optional(),
+  note: z.string().optional(),
 });
 
-// Monthly transactions schema
-export const monthlyTransactionsSchema = z.object({
+// Monthly data schema - category totals per month
+export const monthlyDataSchema = z.object({
   version: z.number().default(1),
   month: z.string().regex(/^\d{4}-\d{2}$/),
-  transactions: z.array(transactionSchema).default([]),
+  income: z.record(z.string(), categoryAmountSchema).default({}),
+  expense: z.record(z.string(), categoryAmountSchema).default({}),
+  transfers: z.array(transferSchema).default([]),
 });
 
 // Budget template schema
@@ -112,6 +110,35 @@ export const budgetsDataSchema = z.object({
   templates: z.record(z.string(), budgetTemplateSchema).default({}),
   monthly: z.record(z.string(), monthlyBudgetSchema).default({}),
   alerts: z.array(budgetAlertSchema).default([]),
+});
+
+// Recurring transaction schema - monthly fixed amounts
+export const recurringSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['income', 'expense']),
+  categoryId: z.string().min(1),
+  amount: categoryAmountSchema, // number or subcategory breakdown
+  enabled: z.boolean().default(true),
+  note: z.string().optional(),
+});
+
+// Recurring transfer schema
+export const recurringTransferSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  amount: z.number().positive(),
+  enabled: z.boolean().default(true),
+  note: z.string().optional(),
+});
+
+// Recurrings data schema
+export const recurringsDataSchema = z.object({
+  version: z.number().default(1),
+  items: z.array(recurringSchema).default([]),
+  transfers: z.array(recurringTransferSchema).default([]),
 });
 
 // Settings schema
@@ -151,11 +178,22 @@ export type Account = z.infer<typeof accountSchema>;
 export type FlowRule = z.infer<typeof flowRuleSchema>;
 export type FlowRules = z.infer<typeof flowRulesSchema>;
 export type AccountsData = z.infer<typeof accountsDataSchema>;
-export type TransactionType = z.infer<typeof transactionTypeSchema>;
-export type Transaction = z.infer<typeof transactionSchema>;
-export type MonthlyTransactions = z.infer<typeof monthlyTransactionsSchema>;
+export type CategoryAmount = z.infer<typeof categoryAmountSchema>;
+export type Transfer = z.infer<typeof transferSchema>;
+export type MonthlyData = z.infer<typeof monthlyDataSchema>;
 export type BudgetTemplate = z.infer<typeof budgetTemplateSchema>;
 export type MonthlyBudget = z.infer<typeof monthlyBudgetSchema>;
 export type BudgetAlert = z.infer<typeof budgetAlertSchema>;
 export type BudgetsData = z.infer<typeof budgetsDataSchema>;
+export type Recurring = z.infer<typeof recurringSchema>;
+export type RecurringTransfer = z.infer<typeof recurringTransferSchema>;
+export type RecurringsData = z.infer<typeof recurringsDataSchema>;
 export type SettingsData = z.infer<typeof settingsDataSchema>;
+
+// Helper function to get total from CategoryAmount
+export function getCategoryTotal(amount: CategoryAmount): number {
+  if (typeof amount === 'number') {
+    return amount;
+  }
+  return Object.values(amount).reduce((sum, val) => sum + val, 0);
+}
