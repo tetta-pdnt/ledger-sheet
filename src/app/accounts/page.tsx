@@ -39,7 +39,10 @@ const accountTypeIcons: Record<AccountType, typeof Building> = {
 };
 
 export default function AccountsPage() {
-  const { accounts, addAccount, updateAccount, deleteAccount } = useLedgerStore();
+  const { accounts, addAccount, updateAccount, deleteAccount, getCalculatedAccountBalances } = useLedgerStore();
+
+  // Get calculated balances
+  const calculatedBalances = getCalculatedAccountBalances();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -106,8 +109,8 @@ export default function AccountsPage() {
     setFormOpen(false);
   };
 
-  const totalBalance = accounts.accounts.reduce(
-    (sum, acc) => sum + acc.initialBalance,
+  const totalBalance = Object.values(calculatedBalances).reduce(
+    (sum, balance) => sum + balance,
     0
   );
 
@@ -166,8 +169,8 @@ export default function AccountsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency(account.initialBalance)}
+                  <div className={`text-2xl font-bold ${(calculatedBalances[account.id] || 0) < 0 ? 'text-red-600' : ''}`}>
+                    {formatCurrency(calculatedBalances[account.id] || 0)}
                   </div>
                 </CardContent>
               </Card>
