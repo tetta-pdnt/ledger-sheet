@@ -47,6 +47,7 @@ export default function RecurringsPage() {
     name?: string;
     type: 'income' | 'expense';
     categoryId?: string;
+    subcategoryId?: string;
     amount?: number;
     enabled: boolean;
     note?: string;
@@ -67,12 +68,17 @@ export default function RecurringsPage() {
       return;
     }
 
+    // If subcategory is selected, store amount as { subcatId: amount }
+    const amount = newRecurring.subcategoryId
+      ? { [newRecurring.subcategoryId]: newRecurring.amount }
+      : newRecurring.amount;
+
     const recurring: Recurring = {
       id: generateId(),
       name: newRecurring.name,
       type: newRecurring.type,
       categoryId: newRecurring.categoryId,
-      amount: newRecurring.amount,
+      amount,
       enabled: newRecurring.enabled,
       note: newRecurring.note,
     };
@@ -109,6 +115,24 @@ export default function RecurringsPage() {
   const getCategoryName = (categoryId: string, type: 'income' | 'expense') => {
     const cats = type === 'income' ? incomeCategories : expenseCategories;
     return cats.find((c) => c.id === categoryId)?.name || categoryId;
+  };
+
+  const getSubcategoryName = (categoryId: string, amount: Recurring['amount'], type: 'income' | 'expense') => {
+    if (typeof amount === 'number') return null;
+    const cats = type === 'income' ? incomeCategories : expenseCategories;
+    const category = cats.find((c) => c.id === categoryId);
+    if (!category) return null;
+    const subcatIds = Object.keys(amount);
+    if (subcatIds.length === 0) return null;
+    const subcat = category.subcategories.find((s) => s.id === subcatIds[0]);
+    return subcat?.name || subcatIds[0];
+  };
+
+  const getSelectedCategorySubcategories = () => {
+    if (!newRecurring.categoryId) return [];
+    const cats = newRecurring.type === 'income' ? incomeCategories : expenseCategories;
+    const category = cats.find((c) => c.id === newRecurring.categoryId);
+    return category?.subcategories || [];
   };
 
   const getAccountName = (accountId: string) => {
@@ -168,7 +192,7 @@ export default function RecurringsPage() {
                     <Label>カテゴリ</Label>
                     <Select
                       value={newRecurring.categoryId}
-                      onValueChange={(v) => setNewRecurring({ ...newRecurring, categoryId: v })}
+                      onValueChange={(v) => setNewRecurring({ ...newRecurring, categoryId: v, subcategoryId: undefined })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="カテゴリを選択" />
@@ -182,6 +206,26 @@ export default function RecurringsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {getSelectedCategorySubcategories().length > 0 && (
+                    <div>
+                      <Label>サブカテゴリ</Label>
+                      <Select
+                        value={newRecurring.subcategoryId || ''}
+                        onValueChange={(v) => setNewRecurring({ ...newRecurring, subcategoryId: v || undefined })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="サブカテゴリを選択（任意）" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getSelectedCategorySubcategories().map((subcat) => (
+                            <SelectItem key={subcat.id} value={subcat.id}>
+                              {subcat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div>
                     <Label>金額</Label>
                     <Input
@@ -212,7 +256,9 @@ export default function RecurringsPage() {
                   定期収入はありません
                 </p>
               ) : (
-                incomeRecurrings.map((item) => (
+                incomeRecurrings.map((item) => {
+                  const subcatName = getSubcategoryName(item.categoryId, item.amount, 'income');
+                  return (
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-3 rounded-lg border"
@@ -228,13 +274,14 @@ export default function RecurringsPage() {
                         <div className="font-medium">{item.name}</div>
                         <div className="text-sm text-muted-foreground">
                           {getCategoryName(item.categoryId, 'income')}
+                          {subcatName && ` / ${subcatName}`}
                           {item.note && ` - ${item.note}`}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="font-medium text-green-600">
-                        +{formatCurrency(typeof item.amount === 'number' ? item.amount : 0)}
+                        +{formatCurrency(typeof item.amount === 'number' ? item.amount : Object.values(item.amount)[0] || 0)}
                       </span>
                       <Button
                         size="icon"
@@ -246,7 +293,7 @@ export default function RecurringsPage() {
                       </Button>
                     </div>
                   </div>
-                ))
+                )})
               )}
             </div>
           </CardContent>
@@ -288,7 +335,7 @@ export default function RecurringsPage() {
                     <Label>カテゴリ</Label>
                     <Select
                       value={newRecurring.categoryId}
-                      onValueChange={(v) => setNewRecurring({ ...newRecurring, categoryId: v })}
+                      onValueChange={(v) => setNewRecurring({ ...newRecurring, categoryId: v, subcategoryId: undefined })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="カテゴリを選択" />
@@ -302,6 +349,26 @@ export default function RecurringsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {getSelectedCategorySubcategories().length > 0 && (
+                    <div>
+                      <Label>サブカテゴリ</Label>
+                      <Select
+                        value={newRecurring.subcategoryId || ''}
+                        onValueChange={(v) => setNewRecurring({ ...newRecurring, subcategoryId: v || undefined })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="サブカテゴリを選択（任意）" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getSelectedCategorySubcategories().map((subcat) => (
+                            <SelectItem key={subcat.id} value={subcat.id}>
+                              {subcat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div>
                     <Label>金額</Label>
                     <Input
@@ -332,7 +399,9 @@ export default function RecurringsPage() {
                   定期支出はありません
                 </p>
               ) : (
-                expenseRecurrings.map((item) => (
+                expenseRecurrings.map((item) => {
+                  const subcatName = getSubcategoryName(item.categoryId, item.amount, 'expense');
+                  return (
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-3 rounded-lg border"
@@ -348,13 +417,14 @@ export default function RecurringsPage() {
                         <div className="font-medium">{item.name}</div>
                         <div className="text-sm text-muted-foreground">
                           {getCategoryName(item.categoryId, 'expense')}
+                          {subcatName && ` / ${subcatName}`}
                           {item.note && ` - ${item.note}`}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="font-medium text-red-600">
-                        -{formatCurrency(typeof item.amount === 'number' ? item.amount : 0)}
+                        -{formatCurrency(typeof item.amount === 'number' ? item.amount : Object.values(item.amount)[0] || 0)}
                       </span>
                       <Button
                         size="icon"
@@ -366,7 +436,7 @@ export default function RecurringsPage() {
                       </Button>
                     </div>
                   </div>
-                ))
+                )})
               )}
             </div>
           </CardContent>
