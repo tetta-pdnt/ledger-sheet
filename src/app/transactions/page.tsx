@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Wallet } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -168,6 +168,7 @@ export default function TransactionsPage() {
     getTotalIncome,
     getTotalExpense,
     getMonthlyBalance,
+    getAccountBalancesUpToMonth,
   } = useLedgerStore();
 
   const monthlyData = getMonthlyData(currentMonth);
@@ -177,6 +178,8 @@ export default function TransactionsPage() {
   const monthlyBalance = getMonthlyBalance(currentMonth);
   const hasSaveAccount = accounts.accounts.some(a => a.id === 'save');
   const hasAccountMain = accounts.accounts.some(a => a.id === 'account');
+  const accountBalances = getAccountBalancesUpToMonth(currentMonth);
+  const totalAssets = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
@@ -295,6 +298,45 @@ export default function TransactionsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Account Balances at Month End */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                月末時点の口座残高
+              </div>
+              <span className="text-base font-bold">
+                {formatCurrency(totalAssets)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {accounts.accounts.map((account) => {
+                const balance = accountBalances[account.id] || 0;
+                return (
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: account.color }}
+                      />
+                      <span className="text-sm">{account.name}</span>
+                    </div>
+                    <span className={`text-sm font-medium ${balance < 0 ? 'text-red-600' : ''}`}>
+                      {formatCurrency(balance)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-2 gap-6">
           {/* Income */}
