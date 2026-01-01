@@ -40,32 +40,32 @@ export function AccountFlowDiagram({
     // Income node at top-left
     positions['income'] = { x: 50, y: 30, width: nodeWidth, height: nodeHeight };
 
-    // Main account (account) at center-left
+    // Main account (account) at left
     const accountNode = accounts.find(a => a.id === 'account');
     if (accountNode) {
-      positions['account'] = { x: 50, y: 150, width: nodeWidth, height: nodeHeight };
+      positions['account'] = { x: 50, y: 170, width: nodeWidth, height: nodeHeight };
     }
 
-    // Save account at top-right
+    // Save account at top-right (for auto-settlement)
     const saveNode = accounts.find(a => a.id === 'save');
     if (saveNode) {
       positions['save'] = { x: width - nodeWidth - 50, y: 30, width: nodeWidth, height: nodeHeight };
     }
 
-    // Pool at center
+    // Pool at center-right top
     const poolNode = accounts.find(a => a.id === 'pool');
     if (poolNode) {
-      positions['pool'] = { x: width / 2 - nodeWidth / 2, y: 150, width: nodeWidth, height: nodeHeight };
+      positions['pool'] = { x: width - nodeWidth - 50, y: 130, width: nodeWidth, height: nodeHeight };
     }
 
-    // NISA at center-right
+    // NISA below pool
     const nisaNode = accounts.find(a => a.id === 'nisa');
     if (nisaNode) {
-      positions['nisa'] = { x: width - nodeWidth - 50, y: 150, width: nodeWidth, height: nodeHeight };
+      positions['nisa'] = { x: width - nodeWidth - 50, y: 210, width: nodeWidth, height: nodeHeight };
     }
 
-    // Expense node at bottom
-    positions['expense'] = { x: width / 2 - nodeWidth / 2, y: 300, width: nodeWidth, height: nodeHeight };
+    // Expense node at bottom-left
+    positions['expense'] = { x: 50, y: 310, width: nodeWidth, height: nodeHeight };
 
     // Position any remaining accounts
     let otherIndex = 0;
@@ -180,25 +180,25 @@ export function AccountFlowDiagram({
       startX = fromCenterX;
       startY = from.y + from.height;
       endX = toCenterX;
-      endY = to.y - 8;
+      endY = to.y;
     } else if (isRight) {
       // Arrow goes right
       startX = from.x + from.width;
       startY = fromCenterY;
-      endX = to.x - 8;
+      endX = to.x;
       endY = toCenterY;
     } else if (isLeft) {
       // Arrow goes left
       startX = from.x;
       startY = fromCenterY;
-      endX = to.x + to.width + 8;
+      endX = to.x + to.width;
       endY = toCenterY;
     } else {
       // Arrow goes up
       startX = fromCenterX;
       startY = from.y;
       endX = toCenterX;
-      endY = to.y + to.height + 8;
+      endY = to.y + to.height;
     }
 
     // Curved path
@@ -244,7 +244,7 @@ export function AccountFlowDiagram({
             id="arrowhead"
             markerWidth="10"
             markerHeight="7"
-            refX="9"
+            refX="0"
             refY="3.5"
             orient="auto"
           >
@@ -256,7 +256,7 @@ export function AccountFlowDiagram({
               id={`arrowhead-${i}`}
               markerWidth="10"
               markerHeight="7"
-              refX="9"
+              refX="0"
               refY="3.5"
               orient="auto"
             >

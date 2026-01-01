@@ -34,8 +34,139 @@ interface CategoryInputProps {
   onChange: (amount: CategoryAmount) => void;
 }
 
-function CategoryInput({ category, type, value, onChange }: CategoryInputProps) {
+// Freeform category input for pool-like categories
+function FreeformCategoryInput({ category, value, onChange }: Omit<CategoryInputProps, 'type'>) {
   const [expanded, setExpanded] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+
+  const isBreakdown = value !== undefined && typeof value === 'object';
+  const total = value ? getCategoryTotal(value) : 0;
+  const items = isBreakdown ? Object.entries(value as Record<string, number>) : [];
+
+  const handleAddItem = () => {
+    if (!newItemName.trim()) return;
+    const currentBreakdown = isBreakdown ? (value as Record<string, number>) : {};
+    onChange({
+      ...currentBreakdown,
+      [newItemName.trim()]: 0,
+    });
+    setNewItemName('');
+  };
+
+  const handleItemChange = (key: string, amount: string) => {
+    const numValue = parseFloat(amount) || 0;
+    const currentBreakdown = isBreakdown ? (value as Record<string, number>) : {};
+    const newBreakdown = {
+      ...currentBreakdown,
+      [key]: numValue,
+    };
+    onChange(newBreakdown);
+  };
+
+  const handleRemoveItem = (key: string) => {
+    if (!isBreakdown) return;
+    const currentBreakdown = { ...(value as Record<string, number>) };
+    delete currentBreakdown[key];
+    if (Object.keys(currentBreakdown).length === 0) {
+      onChange(0);
+    } else {
+      onChange(currentBreakdown);
+    }
+  };
+
+  return (
+    <div className="border rounded-lg p-3">
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </Button>
+        <div
+          className="w-3 h-3 rounded-full"
+          style={{ backgroundColor: category.color }}
+        />
+        <span className="flex-1 font-medium">{category.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">¥</span>
+          <Input
+            type="number"
+            className="w-32 text-right"
+            value={total || ''}
+            readOnly
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 ml-9 space-y-2 border-l-2 pl-4">
+          {items.map(([key, amount]) => (
+            <div key={key} className="flex items-center gap-2">
+              <span className="flex-1 text-sm text-muted-foreground truncate" title={key}>
+                {key}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">¥</span>
+                <Input
+                  type="number"
+                  className="w-28 text-right text-sm"
+                  value={amount || ''}
+                  onChange={(e) => handleItemChange(key, e.target.value)}
+                  placeholder="0"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={() => handleRemoveItem(key)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {/* Add new item */}
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <Input
+              type="text"
+              className="flex-1 text-sm"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+              placeholder="項目名を入力..."
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddItem}
+              disabled={!newItemName.trim()}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              追加
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryInput({ category, value, onChange }: CategoryInputProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Use freeform input for pool category
+  if (category.id === 'pool') {
+    return <FreeformCategoryInput category={category} value={value} onChange={onChange} />;
+  }
+
   const hasSubcategories = category.subcategories.length > 0;
 
   // Determine if value is a breakdown (object) or simple number
