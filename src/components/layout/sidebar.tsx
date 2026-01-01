@@ -18,7 +18,7 @@ import { useLedgerStore } from '@/lib/store';
 
 const navigation = [
   { name: 'ダッシュボード', href: '/', icon: LayoutDashboard },
-  { name: '取引', href: '/transactions', icon: Receipt },
+  { name: '月次収支', href: '/transactions', icon: Receipt },
   { name: '定期項目', href: '/recurrings', icon: RefreshCw },
   { name: 'カテゴリ', href: '/categories', icon: Tags },
   { name: '口座', href: '/accounts', icon: Wallet },

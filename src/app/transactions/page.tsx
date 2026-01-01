@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Wallet } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Wallet, GitBranch } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 import { getCategoryTotal } from '@/lib/schemas';
+import { AccountFlowDiagram } from '@/components/charts/account-flow-diagram';
 import type { Category, CategoryAmount, Transfer } from '@/lib/schemas';
 
 interface CategoryInputProps {
@@ -181,6 +182,15 @@ export default function TransactionsPage() {
   const accountBalances = getAccountBalancesUpToMonth(currentMonth);
   const totalAssets = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
 
+  // Calculate expense by account based on flowRules
+  const expenseByAccount: Record<string, number> = {};
+  for (const [categoryId, amount] of Object.entries(monthlyData.expense)) {
+    const rule = accounts.flowRules.expense[categoryId];
+    const fromAccount = rule?.fromAccount || 'account';
+    const expenseAmount = getCategoryTotal(amount);
+    expenseByAccount[fromAccount] = (expenseByAccount[fromAccount] || 0) + expenseAmount;
+  }
+
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
     from: '',
@@ -335,6 +345,26 @@ export default function TransactionsPage() {
                 );
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Money Flow Diagram */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <GitBranch className="h-4 w-4" />
+              今月のお金の流れ
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AccountFlowDiagram
+              accounts={accounts.accounts}
+              transfers={monthlyData.transfers}
+              totalIncome={totalIncome}
+              monthlyBalance={monthlyBalance}
+              accountBalances={accountBalances}
+              expenseByAccount={expenseByAccount}
+            />
           </CardContent>
         </Card>
 
