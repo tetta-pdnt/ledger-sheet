@@ -1,263 +1,146 @@
 'use client';
 
-import { fileOpen, fileSave, directoryOpen, supported } from 'browser-fs-access';
-
-// Extend FileSystemDirectoryHandle with iterator methods
-interface ExtendedFileSystemDirectoryHandle extends FileSystemDirectoryHandle {
-  values(): AsyncIterableIterator<FileSystemFileHandle | FileSystemDirectoryHandle>;
-}
+// API-based file handler for reading/writing files via Next.js API routes
 
 export interface FileSystemState {
   isSupported: boolean;
-  directoryHandle: FileSystemDirectoryHandle | null;
-  fileHandles: Map<string, FileSystemFileHandle>;
+  directoryHandle: null; // No longer used
+  fileHandles: Map<string, never>;
 }
 
-const state: FileSystemState = {
-  isSupported: false,
-  directoryHandle: null,
-  fileHandles: new Map(),
-};
-
-// Check if File System Access API is supported
+// Always supported when using API
 export function isFileSystemSupported(): boolean {
-  if (typeof window === 'undefined') return false;
-  state.isSupported = supported;
-  return state.isSupported;
+  return true;
 }
 
-// Open a directory and store the handle
-export async function openDirectory(): Promise<FileSystemDirectoryHandle | null> {
-  try {
-    const handle = await (window as typeof window & {
-      showDirectoryPicker: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>
-    }).showDirectoryPicker({
-      mode: 'readwrite',
-    });
-    state.directoryHandle = handle;
-    return handle;
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      return null;
-    }
-    throw error;
-  }
+// No longer needed - returns true for compatibility
+export async function openDirectory(): Promise<true> {
+  return true;
 }
 
-// Get or create a file handle
-async function getFileHandle(
-  filename: string,
-  create: boolean = false
-): Promise<FileSystemFileHandle | null> {
-  if (!state.directoryHandle) {
-    throw new Error('No directory selected');
-  }
-
-  // Check cache first
-  if (state.fileHandles.has(filename)) {
-    return state.fileHandles.get(filename)!;
-  }
-
-  try {
-    const handle = await state.directoryHandle.getFileHandle(filename, { create });
-    state.fileHandles.set(filename, handle);
-    return handle;
-  } catch (error) {
-    if ((error as Error).name === 'NotFoundError' && !create) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-// Get or create a subdirectory handle
-async function getSubdirectoryHandle(
-  dirname: string,
-  create: boolean = false
-): Promise<FileSystemDirectoryHandle | null> {
-  if (!state.directoryHandle) {
-    throw new Error('No directory selected');
-  }
-
-  try {
-    return await state.directoryHandle.getDirectoryHandle(dirname, { create });
-  } catch (error) {
-    if ((error as Error).name === 'NotFoundError' && !create) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-// Read a file as text
+// Read a file via API
 export async function readFile(filename: string): Promise<string | null> {
-  const handle = await getFileHandle(filename, false);
-  if (!handle) return null;
-
-  const file = await handle.getFile();
-  return await file.text();
+  try {
+    const response = await fetch(`/api/data?path=${encodeURIComponent(filename)}`);
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Failed to read file: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.content;
+  } catch (error) {
+    console.error('Error reading file:', error);
+    return null;
+  }
 }
 
-// Read a file from a subdirectory
+// Read a file from a subdirectory via API
 export async function readFileFromSubdir(
   dirname: string,
   filename: string
 ): Promise<string | null> {
-  const dirHandle = await getSubdirectoryHandle(dirname, false);
-  if (!dirHandle) return null;
-
-  try {
-    const fileHandle = await dirHandle.getFileHandle(filename);
-    const file = await fileHandle.getFile();
-    return await file.text();
-  } catch (error) {
-    if ((error as Error).name === 'NotFoundError') {
-      return null;
-    }
-    throw error;
-  }
+  const path = `${dirname}/${filename}`;
+  return readFile(path);
 }
 
-// Write content to a file
+// Write content to a file via API
 export async function writeFile(filename: string, content: string): Promise<void> {
-  const handle = await getFileHandle(filename, true);
-  if (!handle) {
-    throw new Error(`Failed to create file: ${filename}`);
-  }
+  const response = await fetch('/api/data', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filename, content }),
+  });
 
-  const writable = await handle.createWritable();
-  await writable.write(content);
-  await writable.close();
+  if (!response.ok) {
+    throw new Error(`Failed to write file: ${response.statusText}`);
+  }
 }
 
-// Write content to a file in a subdirectory
+// Write content to a file in a subdirectory via API
 export async function writeFileToSubdir(
   dirname: string,
   filename: string,
   content: string
 ): Promise<void> {
-  const dirHandle = await getSubdirectoryHandle(dirname, true);
-  if (!dirHandle) {
-    throw new Error(`Failed to create directory: ${dirname}`);
-  }
-
-  const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(content);
-  await writable.close();
+  const path = `${dirname}/${filename}`;
+  return writeFile(path, content);
 }
 
-// List files in the root directory
+// List files in the root directory via API
 export async function listFiles(): Promise<string[]> {
-  if (!state.directoryHandle) {
-    throw new Error('No directory selected');
-  }
-
-  const files: string[] = [];
-  const handle = state.directoryHandle as ExtendedFileSystemDirectoryHandle;
-  for await (const entry of handle.values()) {
-    if (entry.kind === 'file') {
-      files.push(entry.name);
+  try {
+    const response = await fetch('/api/data?path=&list=true');
+    if (!response.ok) {
+      throw new Error(`Failed to list files: ${response.statusText}`);
     }
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    console.error('Error listing files:', error);
+    return [];
   }
-  return files;
 }
 
-// List files in a subdirectory
+// List files in a subdirectory via API
 export async function listFilesInSubdir(dirname: string): Promise<string[]> {
-  const dirHandle = await getSubdirectoryHandle(dirname, false);
-  if (!dirHandle) return [];
-
-  const files: string[] = [];
-  const handle = dirHandle as ExtendedFileSystemDirectoryHandle;
-  for await (const entry of handle.values()) {
-    if (entry.kind === 'file') {
-      files.push(entry.name);
+  try {
+    const response = await fetch(`/api/data?path=${encodeURIComponent(dirname)}&list=true`);
+    if (!response.ok) {
+      if (response.status === 404) return [];
+      throw new Error(`Failed to list files: ${response.statusText}`);
     }
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    console.error('Error listing files in subdir:', error);
+    return [];
   }
-  return files;
 }
 
-// Check if a file exists
+// Check if a file exists via API
 export async function fileExists(filename: string): Promise<boolean> {
-  const handle = await getFileHandle(filename, false);
-  return handle !== null;
+  try {
+    const response = await fetch(`/api/data?path=${encodeURIComponent(filename)}`);
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
-// Check if a directory exists
+// Check if a directory exists via API
 export async function directoryExists(dirname: string): Promise<boolean> {
-  const handle = await getSubdirectoryHandle(dirname, false);
-  return handle !== null;
+  try {
+    const response = await fetch(`/api/data?path=${encodeURIComponent(dirname)}&list=true`);
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
-// Get the current directory handle
-export function getDirectoryHandle(): FileSystemDirectoryHandle | null {
-  return state.directoryHandle;
+// Get the current directory handle - no longer used
+export function getDirectoryHandle(): null {
+  return null;
 }
 
-// Set directory handle (for restoring from IndexedDB)
-export function setDirectoryHandle(handle: FileSystemDirectoryHandle): void {
-  state.directoryHandle = handle;
+// Set directory handle - no longer used
+export function setDirectoryHandle(): void {
+  // No-op
 }
 
-// Clear cached handles
+// Clear cached handles - no-op for API version
 export function clearHandles(): void {
-  state.directoryHandle = null;
-  state.fileHandles.clear();
+  // No-op
 }
 
-// Fallback: Open file using file input
-export async function openFileFallback(
-  extensions: string[] = ['.yaml', '.yml']
-): Promise<{ name: string; content: string } | null> {
-  try {
-    const blob = await fileOpen({
-      extensions,
-      description: 'YAML files',
-    });
-    const content = await blob.text();
-    return { name: blob.name, content };
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      return null;
-    }
-    throw error;
-  }
+// Legacy fallback functions - redirect to main functions
+export async function openFileFallback(): Promise<{ name: string; content: string } | null> {
+  return null;
 }
 
-// Fallback: Save file using download
-export async function saveFileFallback(
-  content: string,
-  filename: string
-): Promise<void> {
-  const blob = new Blob([content], { type: 'text/yaml' });
-  await fileSave(blob, {
-    fileName: filename,
-    extensions: ['.yaml', '.yml'],
-  });
+export async function saveFileFallback(content: string, filename: string): Promise<void> {
+  await writeFile(filename, content);
 }
 
-// Open multiple files at once (fallback)
-export async function openMultipleFilesFallback(): Promise<
-  Array<{ name: string; content: string }>
-> {
-  try {
-    const blobs = await directoryOpen({
-      recursive: true,
-    });
-
-    const files: Array<{ name: string; content: string }> = [];
-    for (const blob of blobs) {
-      if (blob.name.endsWith('.yaml') || blob.name.endsWith('.yml')) {
-        const content = await blob.text();
-        files.push({ name: blob.name, content });
-      }
-    }
-    return files;
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      return [];
-    }
-    throw error;
-  }
+export async function openMultipleFilesFallback(): Promise<Array<{ name: string; content: string }>> {
+  return [];
 }

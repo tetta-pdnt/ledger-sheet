@@ -10,11 +10,10 @@ import {
   PiggyBank,
   GitGraph,
   Settings,
-  FolderOpen,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { useLedgerStore } from '@/lib/store';
 
 const navigation = [
@@ -30,14 +29,7 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isLoaded, openDataDirectory, loadAllData } = useLedgerStore();
-
-  const handleOpenDirectory = async () => {
-    const success = await openDataDirectory();
-    if (success) {
-      await loadAllData();
-    }
-  };
+  const { isLoaded, isLoading } = useLedgerStore();
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-card">
@@ -69,19 +61,20 @@ export function Sidebar() {
       </div>
 
       <div className="border-t p-4">
-        {!isLoaded ? (
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={handleOpenDirectory}
-          >
-            <FolderOpen className="h-4 w-4" />
-            データフォルダを開く
-          </Button>
-        ) : (
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            読み込み中...
+          </div>
+        ) : isLoaded ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="h-2 w-2 rounded-full bg-green-500" />
-            接続済み
+            データ読み込み済み
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="h-2 w-2 rounded-full bg-yellow-500" />
+            起動中...
           </div>
         )}
       </div>

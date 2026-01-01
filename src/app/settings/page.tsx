@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FolderOpen, Save, RotateCcw } from 'lucide-react';
+import { FolderOpen, Save, RotateCcw, RefreshCw } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,8 +20,8 @@ import { toast } from 'sonner';
 export default function SettingsPage() {
   const {
     isLoaded,
+    isLoading,
     settings,
-    openDataDirectory,
     loadAllData,
     saveSettings,
     reset,
@@ -30,12 +30,9 @@ export default function SettingsPage() {
   const [localSettings, setLocalSettings] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleOpenDirectory = async () => {
-    const success = await openDataDirectory();
-    if (success) {
-      await loadAllData();
-      toast.success('データフォルダを読み込みました');
-    }
+  const handleReload = async () => {
+    await loadAllData();
+    toast.success('データを再読み込みしました');
   };
 
   const handleSaveSettings = async () => {
@@ -66,26 +63,27 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>データフォルダ</CardTitle>
             <CardDescription>
-              YAMLファイルを保存するフォルダを選択します
+              データはプロジェクト配下の <code className="bg-muted px-1 rounded">data</code> ディレクトリに保存されます
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
-              <Button onClick={handleOpenDirectory}>
-                <FolderOpen className="h-4 w-4 mr-2" />
-                フォルダを選択
+              <Button onClick={handleReload} disabled={isLoading} variant="outline">
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                {isLoading ? '読み込み中...' : 'データを再読み込み'}
               </Button>
               {isLoaded && (
-                <span className="text-sm text-green-600">接続済み</span>
+                <span className="text-sm text-green-600">読み込み済み</span>
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              選択したフォルダに以下のファイルが保存されます:
+              以下のファイルが保存されます:
             </p>
             <ul className="text-sm text-muted-foreground list-disc list-inside">
               <li>categories.yaml - カテゴリ設定</li>
               <li>accounts.yaml - 口座設定</li>
               <li>budgets.yaml - 予算設定</li>
+              <li>recurrings.yaml - 定期項目</li>
               <li>settings.yaml - アプリ設定</li>
               <li>transactions/YYYY-MM.yaml - 月別取引データ</li>
             </ul>
