@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
@@ -16,6 +16,8 @@ export default function DashboardPage() {
     getTotalIncome,
     getTotalExpense,
     getMonthlyData,
+    getCalculatedAccountBalances,
+    getMonthlyBalance,
   } = useLedgerStore();
 
   const totalIncome = getTotalIncome(currentMonth);
@@ -23,9 +25,14 @@ export default function DashboardPage() {
   const balance = totalIncome - totalExpense;
   const monthlyData = getMonthlyData(currentMonth);
 
-  const totalBalance = accounts.accounts.reduce((sum, account) => {
-    return sum + account.initialBalance;
-  }, 0);
+  // Get dynamically calculated account balances
+  const calculatedBalances = getCalculatedAccountBalances();
+  const totalBalance = Object.values(calculatedBalances).reduce((sum, bal) => sum + bal, 0);
+
+  // Monthly balance for current month (auto-settled to save)
+  const monthlyBalance = getMonthlyBalance(currentMonth);
+  const hasSaveAccount = accounts.accounts.some(a => a.id === 'save');
+  const hasAccountMain = accounts.accounts.some(a => a.id === 'account');
 
   // Get top expense categories
   const topExpenses = Object.entries(monthlyData.expense)
@@ -119,6 +126,53 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Month-end Settlement Card */}
+        {hasSaveAccount && hasAccountMain && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5" />
+                月末精算
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    今月の収支（pool除く）
+                  </p>
+                  <p className={`text-2xl font-bold ${monthlyBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {monthlyBalance >= 0 ? '+' : ''}{formatCurrency(monthlyBalance)}
+                  </p>
+                </div>
+                <div className="text-right space-y-1">
+                  {monthlyBalance >= 0 ? (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <div>
+                        <p className="font-medium">黒字</p>
+                        <p className="text-xs text-muted-foreground">
+                          saveへ自動振替
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-600">
+                      <ArrowRightLeft className="h-5 w-5" />
+                      <div>
+                        <p className="font-medium">赤字</p>
+                        <p className="text-xs text-muted-foreground">
+                          saveから自動補填
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -225,23 +279,26 @@ export default function DashboardPage() {
                 </p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {accounts.accounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: account.color }}
-                        />
-                        <p className="text-sm font-medium">{account.name}</p>
+                  {accounts.accounts.map((account) => {
+                    const balance = calculatedBalances[account.id] || 0;
+                    return (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: account.color }}
+                          />
+                          <p className="text-sm font-medium">{account.name}</p>
+                        </div>
+                        <div className={`text-sm font-medium ${balance < 0 ? 'text-red-600' : ''}`}>
+                          {formatCurrency(balance)}
+                        </div>
                       </div>
-                      <div className="text-sm font-medium">
-                        {formatCurrency(account.initialBalance)}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

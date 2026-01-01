@@ -236,6 +236,8 @@ interface LedgerState {
   getTotalExpense: (month: string) => number;
   getCategoryTotal: (type: 'income' | 'expense', categoryId: string, month: string) => number;
   getBudgetForCategory: (categoryId: string, month: string) => number;
+  getCalculatedAccountBalances: () => Record<string, number>;
+  getMonthlyBalance: (month: string) => number;
 
   // Reset
   reset: () => void;
@@ -742,6 +744,102 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     const overrideAmount = monthlyBudget.overrides?.expense?.[categoryId];
 
     return overrideAmount !== undefined ? overrideAmount : templateAmount;
+  },
+
+  // Get monthly balance (income - expense, excluding pool)
+  getMonthlyBalance: (month: string): number => {
+    const data = get().getMonthlyData(month);
+    const { accounts } = get();
+    const flowRules = accounts.flowRules;
+
+    // Calculate income (all goes to account)
+    const totalIncome = Object.values(data.income).reduce<number>(
+      (sum, amount) => sum + getAmountTotal(amount),
+      0
+    );
+
+    // Calculate expense excluding pool (pool comes from pool account)
+    const expenseFromAccount = Object.entries(data.expense).reduce<number>(
+      (sum, [categoryId, amount]) => {
+        const rule = flowRules.expense[categoryId];
+        // If fromAccount is pool, don't count it in account balance
+        if (rule?.fromAccount === 'pool') {
+          return sum;
+        }
+        return sum + getAmountTotal(amount);
+      },
+      0
+    );
+
+    return totalIncome - expenseFromAccount;
+  },
+
+  // Get calculated account balances based on all monthly data
+  getCalculatedAccountBalances: (): Record<string, number> => {
+    const { accounts, monthlyData } = get();
+    const flowRules = accounts.flowRules;
+
+    // Initialize balances with initial amounts
+    const balances: Record<string, number> = {};
+    for (const account of accounts.accounts) {
+      balances[account.id] = account.initialBalance;
+    }
+
+    // Process each month's data
+    for (const [, data] of monthlyData) {
+      // Add income to account
+      const totalIncome = Object.values(data.income).reduce<number>(
+        (sum, amount) => sum + getAmountTotal(amount),
+        0
+      );
+      if (balances['account'] !== undefined) {
+        balances['account'] += totalIncome;
+      }
+
+      // Subtract expenses based on flowRules
+      for (const [categoryId, amount] of Object.entries(data.expense)) {
+        const rule = flowRules.expense[categoryId];
+        const fromAccount = rule?.fromAccount || 'account';
+        const expenseAmount = getAmountTotal(amount);
+
+        if (balances[fromAccount] !== undefined) {
+          balances[fromAccount] -= expenseAmount;
+        }
+      }
+
+      // Process explicit transfers (nisa, bank, pool積立 etc.)
+      for (const transfer of data.transfers) {
+        if (balances[transfer.from] !== undefined) {
+          balances[transfer.from] -= transfer.amount;
+        }
+        if (balances[transfer.to] !== undefined) {
+          balances[transfer.to] += transfer.amount;
+        }
+      }
+
+      // Auto-settlement: remaining balance in account goes to/from save
+      // Calculate what's left in account after income, expense, and transfers
+      const monthlyBalance = get().getMonthlyBalance(data.month);
+      const transfersFromAccount = data.transfers
+        .filter(t => t.from === 'account')
+        .reduce((sum, t) => sum + t.amount, 0);
+      const transfersToAccount = data.transfers
+        .filter(t => t.to === 'account')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      // Net balance after explicit transfers
+      const netBalance = monthlyBalance - transfersFromAccount + transfersToAccount;
+
+      // Auto-transfer to/from save
+      if (balances['save'] !== undefined && balances['account'] !== undefined) {
+        // This is implicit: account balance stays at 0 after settlement
+        // save gets the surplus or pays the deficit
+        balances['save'] += netBalance;
+        balances['account'] -= netBalance;
+      }
+    }
+
+    return balances;
   },
 
   // Reset store
