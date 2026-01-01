@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -167,12 +167,16 @@ export default function TransactionsPage() {
     removeTransfer,
     getTotalIncome,
     getTotalExpense,
+    getMonthlyBalance,
   } = useLedgerStore();
 
   const monthlyData = getMonthlyData(currentMonth);
   const totalIncome = getTotalIncome(currentMonth);
   const totalExpense = getTotalExpense(currentMonth);
   const balance = totalIncome - totalExpense;
+  const monthlyBalance = getMonthlyBalance(currentMonth);
+  const hasSaveAccount = accounts.accounts.some(a => a.id === 'save');
+  const hasAccountMain = accounts.accounts.some(a => a.id === 'account');
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
@@ -248,6 +252,49 @@ export default function TransactionsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Month-end Settlement Card */}
+        {hasSaveAccount && hasAccountMain && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4" />
+                月末精算
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    収支バランス（pool除く）
+                  </p>
+                  <p className={`text-xl font-bold ${monthlyBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {monthlyBalance >= 0 ? '+' : ''}{formatCurrency(monthlyBalance)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {monthlyBalance >= 0 ? (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <div>
+                        <p className="text-sm font-medium">黒字</p>
+                        <p className="text-xs text-muted-foreground">saveへ自動振替</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-600">
+                      <ArrowRightLeft className="h-4 w-4" />
+                      <div>
+                        <p className="text-sm font-medium">赤字</p>
+                        <p className="text-xs text-muted-foreground">saveから自動補填</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-2 gap-6">
           {/* Income */}

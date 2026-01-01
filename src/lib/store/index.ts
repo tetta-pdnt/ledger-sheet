@@ -9,6 +9,7 @@ import {
   writeFileToSubdir,
   openDirectory,
   clearHandles,
+  listFilesInSubdir,
 } from '@/lib/file-system';
 import { parseYaml, stringifyYaml, clearAllYamlCache } from '@/lib/file-system/yaml-parser';
 import {
@@ -238,6 +239,13 @@ interface LedgerState {
   getBudgetForCategory: (categoryId: string, month: string) => number;
   getCalculatedAccountBalances: () => Record<string, number>;
   getMonthlyBalance: (month: string) => number;
+  getPeriodTotals: (period: 'year' | 'all', year?: number) => {
+    income: number;
+    expense: number;
+    balance: number;
+    months: string[];
+  };
+  getAvailableYears: () => number[];
 
   // Reset
   reset: () => void;
@@ -321,16 +329,27 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         set({ settings: validated });
       }
 
-      // Load current month's data
-      const { currentMonth } = get();
-      const dataContent = await readFileFromSubdir('transactions', `${currentMonth}.yaml`);
-      if (dataContent) {
-        const parsed = parseYaml<MonthlyData>(dataContent, `data-${currentMonth}`);
-        const validated = monthlyDataSchema.parse(parsed);
-        const newMonthlyData = new Map(get().monthlyData);
-        newMonthlyData.set(currentMonth, validated);
-        set({ monthlyData: newMonthlyData });
+      // Load all transaction files
+      const transactionFiles = await listFilesInSubdir('transactions');
+      const newMonthlyData = new Map<string, MonthlyData>();
+
+      for (const filename of transactionFiles) {
+        if (!filename.endsWith('.yaml')) continue;
+        const month = filename.replace('.yaml', '');
+
+        try {
+          const dataContent = await readFileFromSubdir('transactions', filename);
+          if (dataContent) {
+            const parsed = parseYaml<MonthlyData>(dataContent, `data-${month}`);
+            const validated = monthlyDataSchema.parse(parsed);
+            newMonthlyData.set(month, validated);
+          }
+        } catch (e) {
+          console.warn(`Failed to load transaction file: ${filename}`, e);
+        }
       }
+
+      set({ monthlyData: newMonthlyData });
 
       set({ isLoading: false, isLoaded: true });
     } catch (error) {
@@ -840,6 +859,54 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     }
 
     return balances;
+  },
+
+  // Get available years from monthly data
+  getAvailableYears: (): number[] => {
+    const { monthlyData } = get();
+    const years = new Set<number>();
+    for (const [month] of monthlyData) {
+      const year = parseInt(month.split('-')[0]);
+      years.add(year);
+    }
+    return Array.from(years).sort((a, b) => b - a); // Most recent first
+  },
+
+  // Get totals for a period (year or all time)
+  getPeriodTotals: (period, year) => {
+    const { monthlyData } = get();
+    let totalIncome = 0;
+    let totalExpense = 0;
+    const months: string[] = [];
+
+    for (const [month, data] of monthlyData) {
+      // Filter by year if period is 'year'
+      if (period === 'year' && year) {
+        const dataYear = parseInt(month.split('-')[0]);
+        if (dataYear !== year) continue;
+      }
+
+      months.push(month);
+
+      // Sum income
+      totalIncome += Object.values(data.income).reduce<number>(
+        (sum, amount) => sum + getAmountTotal(amount),
+        0
+      );
+
+      // Sum expense
+      totalExpense += Object.values(data.expense).reduce<number>(
+        (sum, amount) => sum + getAmountTotal(amount),
+        0
+      );
+    }
+
+    return {
+      income: totalIncome,
+      expense: totalExpense,
+      balance: totalIncome - totalExpense,
+      months: months.sort(),
+    };
   },
 
   // Reset store

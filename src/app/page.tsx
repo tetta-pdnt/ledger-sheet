@@ -1,74 +1,148 @@
 'use client';
 
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
-import { getCategoryTotal } from '@/lib/schemas';
+
+type PeriodType = 'all' | 'year';
 
 export default function DashboardPage() {
   const {
-    currentMonth,
     categories,
     accounts,
-    getTotalIncome,
-    getTotalExpense,
-    getMonthlyData,
+    monthlyData,
     getCalculatedAccountBalances,
-    getMonthlyBalance,
+    getPeriodTotals,
+    getAvailableYears,
   } = useLedgerStore();
 
-  const totalIncome = getTotalIncome(currentMonth);
-  const totalExpense = getTotalExpense(currentMonth);
-  const balance = totalIncome - totalExpense;
-  const monthlyData = getMonthlyData(currentMonth);
+  const [periodType, setPeriodType] = useState<PeriodType>('all');
+  const availableYears = getAvailableYears();
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+
+  // Get period totals based on selection
+  const periodTotals = getPeriodTotals(periodType, periodType === 'year' ? selectedYear : undefined);
+  const { income: totalIncome, expense: totalExpense, balance, months } = periodTotals;
 
   // Get dynamically calculated account balances
   const calculatedBalances = getCalculatedAccountBalances();
   const totalBalance = Object.values(calculatedBalances).reduce((sum, bal) => sum + bal, 0);
 
-  // Monthly balance for current month (auto-settled to save)
-  const monthlyBalance = getMonthlyBalance(currentMonth);
-  const hasSaveAccount = accounts.accounts.some(a => a.id === 'save');
-  const hasAccountMain = accounts.accounts.some(a => a.id === 'account');
+  // Calculate category totals for the period
+  const getCategoryTotalsForPeriod = (type: 'income' | 'expense') => {
+    const totals: Record<string, number> = {};
 
-  // Get top expense categories
-  const topExpenses = Object.entries(monthlyData.expense)
-    .map(([categoryId, amount]) => {
-      const category = categories.categories.expense.find((c) => c.id === categoryId);
-      return {
-        id: categoryId,
-        name: category?.name || categoryId,
-        color: category?.color || '#6B7280',
-        amount: getCategoryTotal(amount),
-      };
-    })
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+    for (const [month] of monthlyData) {
+      // Filter by year if needed
+      if (periodType === 'year') {
+        const dataYear = parseInt(month.split('-')[0]);
+        if (dataYear !== selectedYear) continue;
+      }
 
-  // Get top income categories
-  const topIncomes = Object.entries(monthlyData.income)
-    .map(([categoryId, amount]) => {
-      const category = categories.categories.income.find((c) => c.id === categoryId);
-      return {
-        id: categoryId,
-        name: category?.name || categoryId,
-        color: category?.color || '#6B7280',
-        amount: getCategoryTotal(amount),
-      };
-    })
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+      const data = monthlyData.get(month);
+      if (!data) continue;
+
+      const categoryData = type === 'income' ? data.income : data.expense;
+      for (const [categoryId, amount] of Object.entries(categoryData)) {
+        const value = typeof amount === 'number' ? amount : Object.values(amount).reduce((s, v) => s + v, 0);
+        totals[categoryId] = (totals[categoryId] || 0) + value;
+      }
+    }
+
+    return Object.entries(totals)
+      .map(([categoryId, amount]) => {
+        const categoryList = type === 'income' ? categories.categories.income : categories.categories.expense;
+        const category = categoryList.find((c) => c.id === categoryId);
+        return {
+          id: categoryId,
+          name: category?.name || categoryId,
+          color: category?.color || '#6B7280',
+          amount,
+        };
+      })
+      .filter((item) => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  };
+
+  const topExpenses = getCategoryTotalsForPeriod('expense');
+  const topIncomes = getCategoryTotalsForPeriod('income');
+
+  // Period label
+  const periodLabel = periodType === 'all'
+    ? '全期間'
+    : `${selectedYear}年`;
+
+  // Chart description based on period
+  const chartDescription = periodType === 'all'
+    ? '全期間のカテゴリ別'
+    : `${selectedYear}年のカテゴリ別`;
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="ダッシュボード" />
+      <Header title="ダッシュボード" showMonthPicker={false} />
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
+        {/* Period Selector */}
+        <div className="flex items-center gap-4">
+          <Calendar className="h-5 w-5 text-muted-foreground" />
+          <div className="flex gap-2">
+            <Button
+              variant={periodType === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriodType('all')}
+            >
+              全期間
+            </Button>
+            <Button
+              variant={periodType === 'year' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriodType('year')}
+            >
+              年単位
+            </Button>
+          </div>
+          {periodType === 'year' && (
+            <Select
+              value={selectedYear.toString()}
+              onValueChange={(v) => setSelectedYear(parseInt(v))}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.length > 0 ? (
+                  availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}年
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value={currentYear.toString()}>
+                    {currentYear}年
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          )}
+          <span className="text-sm text-muted-foreground">
+            {months.length}ヶ月分のデータ
+          </span>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -79,7 +153,7 @@ export default function DashboardPage() {
               <div className="text-2xl font-bold text-green-600">
                 {formatCurrency(totalIncome)}
               </div>
-              <p className="text-xs text-muted-foreground">今月の総収入</p>
+              <p className="text-xs text-muted-foreground">{periodLabel}の総収入</p>
             </CardContent>
           </Card>
 
@@ -92,7 +166,7 @@ export default function DashboardPage() {
               <div className="text-2xl font-bold text-red-600">
                 {formatCurrency(totalExpense)}
               </div>
-              <p className="text-xs text-muted-foreground">今月の総支出</p>
+              <p className="text-xs text-muted-foreground">{periodLabel}の総支出</p>
             </CardContent>
           </Card>
 
@@ -109,7 +183,7 @@ export default function DashboardPage() {
               >
                 {balance >= 0 ? '+' : ''}{formatCurrency(balance)}
               </div>
-              <p className="text-xs text-muted-foreground">収入 - 支出</p>
+              <p className="text-xs text-muted-foreground">{periodLabel}の収支</p>
             </CardContent>
           </Card>
 
@@ -127,64 +201,17 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Month-end Settlement Card */}
-        {hasSaveAccount && hasAccountMain && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ArrowRightLeft className="h-5 w-5" />
-                月末精算
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    今月の収支（pool除く）
-                  </p>
-                  <p className={`text-2xl font-bold ${monthlyBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {monthlyBalance >= 0 ? '+' : ''}{formatCurrency(monthlyBalance)}
-                  </p>
-                </div>
-                <div className="text-right space-y-1">
-                  {monthlyBalance >= 0 ? (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle2 className="h-5 w-5" />
-                      <div>
-                        <p className="font-medium">黒字</p>
-                        <p className="text-xs text-muted-foreground">
-                          saveへ自動振替
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-600">
-                      <ArrowRightLeft className="h-5 w-5" />
-                      <div>
-                        <p className="font-medium">赤字</p>
-                        <p className="text-xs text-muted-foreground">
-                          saveから自動補填
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="text-red-600">支出推移</CardTitle>
               <p className="text-sm text-muted-foreground">
-                過去6ヶ月のカテゴリ別支出
+                {chartDescription}支出
               </p>
             </CardHeader>
             <CardContent>
-              <StackedAreaChart type="expense" months={6} />
+              <StackedAreaChart type="expense" periodType={periodType} selectedYear={selectedYear} />
             </CardContent>
           </Card>
 
@@ -192,11 +219,11 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="text-green-600">収入推移</CardTitle>
               <p className="text-sm text-muted-foreground">
-                過去6ヶ月のカテゴリ別収入
+                {chartDescription}収入
               </p>
             </CardHeader>
             <CardContent>
-              <StackedAreaChart type="income" months={6} />
+              <StackedAreaChart type="income" periodType={periodType} selectedYear={selectedYear} />
             </CardContent>
           </Card>
         </div>
@@ -204,7 +231,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>支出内訳</CardTitle>
+              <CardTitle>支出内訳（{periodLabel}）</CardTitle>
             </CardHeader>
             <CardContent>
               {topExpenses.length === 0 ? (
@@ -237,7 +264,7 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>収入内訳</CardTitle>
+              <CardTitle>収入内訳（{periodLabel}）</CardTitle>
             </CardHeader>
             <CardContent>
               {topIncomes.length === 0 ? (
@@ -280,7 +307,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {accounts.accounts.map((account) => {
-                    const balance = calculatedBalances[account.id] || 0;
+                    const accountBalance = calculatedBalances[account.id] || 0;
                     return (
                       <div
                         key={account.id}
@@ -293,8 +320,8 @@ export default function DashboardPage() {
                           />
                           <p className="text-sm font-medium">{account.name}</p>
                         </div>
-                        <div className={`text-sm font-medium ${balance < 0 ? 'text-red-600' : ''}`}>
-                          {formatCurrency(balance)}
+                        <div className={`text-sm font-medium ${accountBalance < 0 ? 'text-red-600' : ''}`}>
+                          {formatCurrency(accountBalance)}
                         </div>
                       </div>
                     );

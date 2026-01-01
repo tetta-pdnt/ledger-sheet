@@ -20,10 +20,17 @@ import { ja } from 'date-fns/locale';
 interface StackedAreaChartProps {
   type: 'income' | 'expense';
   months?: number;
+  periodType?: 'all' | 'year';
+  selectedYear?: number;
 }
 
-export function StackedAreaChart({ type, months = 6 }: StackedAreaChartProps) {
-  const { categories, getMonthlyData, currentMonth } = useLedgerStore();
+export function StackedAreaChart({
+  type,
+  months = 6,
+  periodType,
+  selectedYear,
+}: StackedAreaChartProps) {
+  const { categories, getMonthlyData, currentMonth, monthlyData } = useLedgerStore();
 
   const categoryList: Category[] =
     type === 'income'
@@ -32,31 +39,81 @@ export function StackedAreaChart({ type, months = 6 }: StackedAreaChartProps) {
 
   const chartData = useMemo(() => {
     const data: Record<string, string | number>[] = [];
-    const currentDate = parse(currentMonth, 'yyyy-MM', new Date());
 
-    for (let i = months - 1; i >= 0; i--) {
-      const targetDate = subMonths(currentDate, i);
-      const monthKey = format(targetDate, 'yyyy-MM');
-      const monthLabel = format(targetDate, 'M月', { locale: ja });
+    if (periodType === 'all') {
+      // Show all available months
+      const allMonths = Array.from(monthlyData.keys()).sort();
+      for (const monthKey of allMonths) {
+        const monthDate = parse(monthKey, 'yyyy-MM', new Date());
+        const monthLabel = format(monthDate, 'M月', { locale: ja });
 
-      const monthlyData = getMonthlyData(monthKey);
-      const amounts = type === 'income' ? monthlyData.income : monthlyData.expense;
+        const monthData = getMonthlyData(monthKey);
+        const amounts = type === 'income' ? monthData.income : monthData.expense;
 
-      const dataPoint: Record<string, string | number> = {
-        month: monthLabel,
-        monthKey,
-      };
+        const dataPoint: Record<string, string | number> = {
+          month: monthLabel,
+          monthKey,
+        };
 
-      categoryList.forEach((cat) => {
-        const amount = amounts[cat.id];
-        dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
-      });
+        categoryList.forEach((cat) => {
+          const amount = amounts[cat.id];
+          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+        });
 
-      data.push(dataPoint);
+        data.push(dataPoint);
+      }
+    } else if (periodType === 'year' && selectedYear) {
+      // Show only selected year's months
+      const allMonths = Array.from(monthlyData.keys()).sort();
+      const yearMonths = allMonths.filter((m) => m.startsWith(`${selectedYear}-`));
+
+      for (const monthKey of yearMonths) {
+        const monthDate = parse(monthKey, 'yyyy-MM', new Date());
+        const monthLabel = format(monthDate, 'M月', { locale: ja });
+
+        const monthData = getMonthlyData(monthKey);
+        const amounts = type === 'income' ? monthData.income : monthData.expense;
+
+        const dataPoint: Record<string, string | number> = {
+          month: monthLabel,
+          monthKey,
+        };
+
+        categoryList.forEach((cat) => {
+          const amount = amounts[cat.id];
+          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+        });
+
+        data.push(dataPoint);
+      }
+    } else {
+      // Legacy: show last N months from currentMonth
+      const currentDate = parse(currentMonth, 'yyyy-MM', new Date());
+
+      for (let i = months - 1; i >= 0; i--) {
+        const targetDate = subMonths(currentDate, i);
+        const monthKey = format(targetDate, 'yyyy-MM');
+        const monthLabel = format(targetDate, 'M月', { locale: ja });
+
+        const monthData = getMonthlyData(monthKey);
+        const amounts = type === 'income' ? monthData.income : monthData.expense;
+
+        const dataPoint: Record<string, string | number> = {
+          month: monthLabel,
+          monthKey,
+        };
+
+        categoryList.forEach((cat) => {
+          const amount = amounts[cat.id];
+          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+        });
+
+        data.push(dataPoint);
+      }
     }
 
     return data;
-  }, [currentMonth, months, type, categoryList, getMonthlyData]);
+  }, [currentMonth, months, type, categoryList, getMonthlyData, monthlyData, periodType, selectedYear]);
 
   // Filter categories that have at least some data
   const activeCategories = useMemo(() => {
