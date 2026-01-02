@@ -20,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ColorPicker } from '@/components/ui/color-picker';
+import { MonthPicker } from '@/components/ui/month-picker';
 import { useLedgerStore } from '@/lib/store';
 import { generateCategoryId } from '@/lib/utils';
 import type { Category, Subcategory } from '@/lib/schemas';
@@ -416,21 +417,21 @@ export default function CategoriesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>開始月</Label>
-                <Input
-                  type="month"
+                <MonthPicker
                   value={subFormData.startMonth}
-                  onChange={(e) => setSubFormData({ ...subFormData, startMonth: e.target.value })}
-                  placeholder="YYYY-MM"
+                  onChange={(value) => setSubFormData({ ...subFormData, startMonth: value })}
+                  placeholder="最初から有効"
+                  className="w-full"
                 />
                 <p className="text-xs text-muted-foreground">空欄 = 最初から有効</p>
               </div>
               <div className="space-y-2">
                 <Label>終了月</Label>
-                <Input
-                  type="month"
+                <MonthPicker
                   value={subFormData.endMonth}
-                  onChange={(e) => setSubFormData({ ...subFormData, endMonth: e.target.value })}
-                  placeholder="YYYY-MM"
+                  onChange={(value) => setSubFormData({ ...subFormData, endMonth: value })}
+                  placeholder="無期限"
+                  className="w-full"
                 />
                 <p className="text-xs text-muted-foreground">空欄 = 無期限</p>
               </div>

@@ -5,7 +5,6 @@ import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar, Filter } fr
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -21,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { MonthPicker } from '@/components/ui/month-picker';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
@@ -164,20 +164,18 @@ export default function DashboardPage() {
           </div>
           {periodType === 'range' && (
             <>
-              <Input
-                type="month"
+              <MonthPicker
                 value={startMonth}
-                onChange={(e) => setStartMonth(e.target.value)}
-                className="w-40"
+                onChange={setStartMonth}
                 placeholder="開始月"
+                className="w-auto"
               />
               <span className="text-sm text-muted-foreground">〜</span>
-              <Input
-                type="month"
+              <MonthPicker
                 value={endMonth}
-                onChange={(e) => setEndMonth(e.target.value)}
-                className="w-40"
+                onChange={setEndMonth}
                 placeholder="終了月"
+                className="w-auto"
               />
             </>
           )}
