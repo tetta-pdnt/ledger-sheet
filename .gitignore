@@ -40,12 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Data files (user's personal financial data)
-/data/
-*.yaml
-*.yml
-!components.json
-
 # Override global gitignore - include src/lib
 !src/lib/
 !src/lib/**
