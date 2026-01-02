@@ -14,6 +14,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ColorPicker } from '@/components/ui/color-picker';
 import { useLedgerStore } from '@/lib/store';
 import { generateCategoryId } from '@/lib/utils';
 import type { Category, Subcategory } from '@/lib/schemas';
@@ -351,12 +357,24 @@ export default function CategoriesPage() {
             <div className="space-y-2">
               <Label>色</Label>
               <div className="flex gap-2">
-                <Input
-                  type="color"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                  className="w-16 h-10 p-1"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      className="w-12 rounded border"
+                      style={{ backgroundColor: formData.color }}
+                    />
+                  </PopoverTrigger>
+
+                  <PopoverContent className="w-auto p-3">
+                    <ColorPicker
+                      value={formData.color}
+                      onChange={(color) =>
+                        setFormData({ ...formData, color })
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
                 <Input
                   value={formData.color}
                   onChange={(e) => setFormData({ ...formData, color: e.target.value })}

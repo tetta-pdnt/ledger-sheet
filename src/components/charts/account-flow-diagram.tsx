@@ -328,6 +328,7 @@ export function AccountFlowDiagram({
 
           return (
             <path
+              key={`${flow.from}-${flow.to}-${flow.offsetIndex}`}
               d={getArrowPath(fromPos, toPos, flow.offsetIndex)}
               fill="none"
               stroke={flow.color}
