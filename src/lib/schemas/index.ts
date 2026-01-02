@@ -26,7 +26,7 @@ export const categoriesDataSchema = z.object({
 });
 
 // Account type schema
-export const accountTypeSchema = z.enum(['bank', 'credit', 'cash', 'investment']);
+export const accountTypeSchema = z.enum(['bank', 'credit', 'cash', 'investment', 'pool']);
 
 // Account schema
 export const accountSchema = z.object({
@@ -84,10 +84,40 @@ export const monthlyDataSchema = z.object({
   transfers: z.array(transferSchema).default([]),
 });
 
+// Budget amount - either a number or subcategory breakdown (same as categoryAmountSchema)
+// e.g., food: 45000 or food: { groceries: 30000, restaurants: 15000 }
+export const budgetAmountSchema = z.union([
+  z.number().nonnegative(),
+  z.record(z.string(), z.number().nonnegative()),
+]);
+
+// Salary history entry - tracks salary changes over time
+export const salaryHistoryEntrySchema = z.object({
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/), // 開始月 (YYYY-MM)
+  amount: z.number().nonnegative(),
+});
+
+// Budget item history entry - tracks individual budget/allocation changes over time
+export const budgetItemHistoryEntrySchema = z.object({
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/), // 開始月 (YYYY-MM)
+  amount: budgetAmountSchema, // number or subcategory breakdown
+});
+
+// Allocation history entry - tracks account allocation changes over time
+export const allocationHistoryEntrySchema = z.object({
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/), // 開始月 (YYYY-MM)
+  amount: z.number().nonnegative(),
+});
+
 // Budget template schema
 export const budgetTemplateSchema = z.object({
+  baseSalary: z.number().nonnegative().optional(), // 基本給与（後方互換）
+  salaryHistory: z.array(salaryHistoryEntrySchema).optional(), // 給与履歴
   income: z.record(z.string(), z.number()).optional(),
-  expense: z.record(z.string(), z.number()).optional(),
+  expense: z.record(z.string(), budgetAmountSchema).optional(), // 予算（後方互換）
+  expenseHistory: z.record(z.string(), z.array(budgetItemHistoryEntrySchema)).optional(), // カテゴリ別予算履歴
+  accountAllocations: z.record(z.string(), z.number().nonnegative()).optional(), // 口座振替（後方互換）
+  allocationHistory: z.record(z.string(), z.array(allocationHistoryEntrySchema)).optional(), // 口座別振替履歴
 });
 
 // Monthly budget schema
@@ -181,6 +211,10 @@ export type AccountsData = z.infer<typeof accountsDataSchema>;
 export type CategoryAmount = z.infer<typeof categoryAmountSchema>;
 export type Transfer = z.infer<typeof transferSchema>;
 export type MonthlyData = z.infer<typeof monthlyDataSchema>;
+export type BudgetAmount = z.infer<typeof budgetAmountSchema>;
+export type SalaryHistoryEntry = z.infer<typeof salaryHistoryEntrySchema>;
+export type BudgetItemHistoryEntry = z.infer<typeof budgetItemHistoryEntrySchema>;
+export type AllocationHistoryEntry = z.infer<typeof allocationHistoryEntrySchema>;
 export type BudgetTemplate = z.infer<typeof budgetTemplateSchema>;
 export type MonthlyBudget = z.infer<typeof monthlyBudgetSchema>;
 export type BudgetAlert = z.infer<typeof budgetAlertSchema>;

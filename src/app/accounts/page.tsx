@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Pencil, Building, Wallet, CreditCard, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, Pencil, Building, Wallet, CreditCard, TrendingUp, Database } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ const accountTypeLabels: Record<AccountType, string> = {
   credit: 'クレジットカード',
   cash: '現金',
   investment: '投資',
+  pool: 'pool',
 };
 
 const accountTypeIcons: Record<AccountType, typeof Building> = {
@@ -36,6 +37,7 @@ const accountTypeIcons: Record<AccountType, typeof Building> = {
   credit: CreditCard,
   cash: Wallet,
   investment: TrendingUp,
+  pool: Database,
 };
 
 export default function AccountsPage() {
@@ -223,6 +225,7 @@ export default function AccountsPage() {
                   <SelectItem value="credit">クレジットカード</SelectItem>
                   <SelectItem value="cash">現金</SelectItem>
                   <SelectItem value="investment">投資</SelectItem>
+                  <SelectItem value="pool">pool</SelectItem>
                 </SelectContent>
               </Select>
             </div>

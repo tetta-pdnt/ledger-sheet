@@ -34,7 +34,7 @@ export function Sidebar() {
   return (
     <div className="flex h-full w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">
-        <h1 className="text-xl font-bold">Ledger</h1>
+        <h1 className="text-xl font-bold">Ledger Sheet</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">

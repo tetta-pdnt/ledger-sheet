@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ledger - 家計簿",
+  title: "Ledger Sheet",
   description: "月次収支管理アプリケーション",
 };
 

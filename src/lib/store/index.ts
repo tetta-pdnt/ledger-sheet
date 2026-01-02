@@ -31,8 +31,17 @@ import {
   type Category,
   type Account,
   type CategoryAmount,
+  type BudgetAmount,
   type Transfer,
 } from '@/lib/schemas';
+
+// Helper to get total from BudgetAmount (same logic as CategoryAmount)
+function getBudgetAmountTotal(amount: BudgetAmount): number {
+  if (typeof amount === 'number') {
+    return amount;
+  }
+  return Object.values(amount).reduce((sum, val) => sum + val, 0);
+}
 
 // Default data
 const defaultCategories: CategoriesData = {
@@ -219,8 +228,10 @@ interface LedgerState {
   addTransfer: (transfer: Transfer) => void;
   removeTransfer: (index: number) => void;
 
-  // Actions - Budgets
-  setBudget: (categoryId: string, amount: number, month?: string) => void;
+  // Actions - Budgets (saves to default template, persists across all months)
+  setBaseSalary: (amount: number) => void;
+  setBudget: (categoryId: string, amount: number | Record<string, number>) => void;
+  setAccountAllocation: (accountId: string, amount: number) => void;
 
   // Actions - Recurrings
   addRecurring: (recurring: Recurring) => void;
@@ -236,7 +247,13 @@ interface LedgerState {
   getTotalIncome: (month: string) => number;
   getTotalExpense: (month: string) => number;
   getCategoryTotal: (type: 'income' | 'expense', categoryId: string, month: string) => number;
+  getBaseSalary: (month: string) => number;
   getBudgetForCategory: (categoryId: string, month: string) => number;
+  getBudgetForSubcategory: (categoryId: string, subcategoryId: string, month: string) => number;
+  getAccountAllocations: (month: string) => Record<string, number>;
+  getUnallocatedAmount: (month: string) => number;
+  getTotalBudgetExpense: (month: string) => number;
+  getBudgetSettingsDate: (month: string) => string | null; // 設定日（最新の変更月）を取得
   getCalculatedAccountBalances: () => Record<string, number>;
   getAccountBalancesUpToMonth: (month: string) => Record<string, number>;
   getMonthlyBalance: (month: string) => number;
@@ -575,26 +592,107 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     get().saveMonthlyData(currentMonth);
   },
 
-  // Set budget
-  setBudget: (categoryId, amount, month) => {
+  // Set base salary (saves to salary history, effective from specified month onwards)
+  setBaseSalary: (amount) => {
     const { budgets, currentMonth } = get();
-    const targetMonth = month || currentMonth;
+    const defaultTemplate = budgets.templates['default'] || {};
+    const salaryHistory = defaultTemplate.salaryHistory || [];
 
-    const monthlyBudget = budgets.monthly[targetMonth] || { template: 'default' };
-    const overrides = monthlyBudget.overrides || { expense: {} };
+    // Check if there's already an entry for this month
+    const existingIndex = salaryHistory.findIndex(e => e.startMonth === currentMonth);
+    let newHistory;
+    if (existingIndex >= 0) {
+      // Update existing entry
+      newHistory = [...salaryHistory];
+      newHistory[existingIndex] = { startMonth: currentMonth, amount };
+    } else {
+      // Add new entry and sort by startMonth
+      newHistory = [...salaryHistory, { startMonth: currentMonth, amount }]
+        .sort((a, b) => a.startMonth.localeCompare(b.startMonth));
+    }
 
     const updated = {
       ...budgets,
-      monthly: {
-        ...budgets.monthly,
-        [targetMonth]: {
-          ...monthlyBudget,
-          overrides: {
-            ...overrides,
-            expense: {
-              ...overrides.expense,
-              [categoryId]: amount,
-            },
+      templates: {
+        ...budgets.templates,
+        default: {
+          ...defaultTemplate,
+          salaryHistory: newHistory,
+        },
+      },
+    };
+
+    set({ budgets: updated });
+    get().saveBudgets();
+  },
+
+  // Set budget (saves to expense history, effective from current month onwards)
+  setBudget: (categoryId, amount) => {
+    const { budgets, currentMonth } = get();
+    const defaultTemplate = budgets.templates['default'] || {};
+    const expenseHistory = defaultTemplate.expenseHistory || {};
+    const categoryHistory = expenseHistory[categoryId] || [];
+
+    // Check if there's already an entry for this month
+    const existingIndex = categoryHistory.findIndex(e => e.startMonth === currentMonth);
+    let newHistory;
+    if (existingIndex >= 0) {
+      // Update existing entry
+      newHistory = [...categoryHistory];
+      newHistory[existingIndex] = { startMonth: currentMonth, amount };
+    } else {
+      // Add new entry and sort by startMonth
+      newHistory = [...categoryHistory, { startMonth: currentMonth, amount }]
+        .sort((a, b) => a.startMonth.localeCompare(b.startMonth));
+    }
+
+    const updated = {
+      ...budgets,
+      templates: {
+        ...budgets.templates,
+        default: {
+          ...defaultTemplate,
+          expenseHistory: {
+            ...expenseHistory,
+            [categoryId]: newHistory,
+          },
+        },
+      },
+    };
+
+    set({ budgets: updated });
+    get().saveBudgets();
+  },
+
+  // Set account allocation (saves to allocation history, effective from current month onwards)
+  setAccountAllocation: (accountId, amount) => {
+    const { budgets, currentMonth } = get();
+    const defaultTemplate = budgets.templates['default'] || {};
+    const allocationHistory = defaultTemplate.allocationHistory || {};
+    const accountHistory = allocationHistory[accountId] || [];
+
+    // Check if there's already an entry for this month
+    const existingIndex = accountHistory.findIndex(e => e.startMonth === currentMonth);
+    let newHistory;
+    if (existingIndex >= 0) {
+      // Update existing entry
+      newHistory = [...accountHistory];
+      newHistory[existingIndex] = { startMonth: currentMonth, amount };
+    } else {
+      // Add new entry and sort by startMonth
+      newHistory = [...accountHistory, { startMonth: currentMonth, amount }]
+        .sort((a, b) => a.startMonth.localeCompare(b.startMonth));
+    }
+
+    const updated = {
+      ...budgets,
+      templates: {
+        ...budgets.templates,
+        default: {
+          ...defaultTemplate,
+          allocationHistory: {
+            ...allocationHistory,
+            [accountId]: newHistory,
           },
         },
       },
@@ -750,40 +848,193 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     return amount ? getAmountTotal(amount) : 0;
   },
 
-  // Get budget for category
-  getBudgetForCategory: (categoryId, month) => {
+  // Get base salary for a month (finds the most recent salary entry for the given month)
+  getBaseSalary: (month) => {
     const { budgets } = get();
-    const monthlyBudget = budgets.monthly[month];
-    if (!monthlyBudget) {
-      const defaultTemplate = budgets.templates['default'];
-      return defaultTemplate?.expense?.[categoryId] || 0;
+    const defaultTemplate = budgets.templates['default'];
+    const salaryHistory = defaultTemplate?.salaryHistory || [];
+
+    // Find the most recent entry that is <= the given month
+    let applicableSalary = 0;
+    for (const entry of salaryHistory) {
+      if (entry.startMonth <= month) {
+        applicableSalary = entry.amount;
+      } else {
+        break; // History is sorted, so we can stop early
+      }
     }
 
-    const template = budgets.templates[monthlyBudget.template] || budgets.templates['default'];
-    const templateAmount = template?.expense?.[categoryId] || 0;
-    const overrideAmount = monthlyBudget.overrides?.expense?.[categoryId];
+    // Fall back to legacy baseSalary if no history entries found
+    if (applicableSalary === 0 && defaultTemplate?.baseSalary) {
+      return defaultTemplate.baseSalary;
+    }
 
-    return overrideAmount !== undefined ? overrideAmount : templateAmount;
+    return applicableSalary;
   },
 
-  // Get monthly balance (income - expense, excluding pool)
+  // Get budget for category (returns total if subcategories exist)
+  getBudgetForCategory: (categoryId, month) => {
+    const { budgets } = get();
+    const defaultTemplate = budgets.templates['default'];
+    const expenseHistory = defaultTemplate?.expenseHistory?.[categoryId] || [];
+
+    // Find the most recent entry that is <= the given month
+    let applicableBudget: number | Record<string, number> | undefined;
+    for (const entry of expenseHistory) {
+      if (entry.startMonth <= month) {
+        applicableBudget = entry.amount;
+      } else {
+        break; // History is sorted, so we can stop early
+      }
+    }
+
+    // Fall back to legacy expense if no history entries found
+    if (applicableBudget === undefined) {
+      applicableBudget = defaultTemplate?.expense?.[categoryId];
+    }
+
+    if (applicableBudget === undefined) return 0;
+    return getBudgetAmountTotal(applicableBudget);
+  },
+
+  // Get budget for a specific subcategory
+  getBudgetForSubcategory: (categoryId, subcategoryId, month) => {
+    const { budgets } = get();
+    const defaultTemplate = budgets.templates['default'];
+    const expenseHistory = defaultTemplate?.expenseHistory?.[categoryId] || [];
+
+    // Find the most recent entry that is <= the given month
+    let applicableBudget: number | Record<string, number> | undefined;
+    for (const entry of expenseHistory) {
+      if (entry.startMonth <= month) {
+        applicableBudget = entry.amount;
+      } else {
+        break; // History is sorted, so we can stop early
+      }
+    }
+
+    // Fall back to legacy expense if no history entries found
+    if (applicableBudget === undefined) {
+      applicableBudget = defaultTemplate?.expense?.[categoryId];
+    }
+
+    if (applicableBudget === undefined) return 0;
+    if (typeof applicableBudget === 'number') return 0; // No subcategory breakdown
+    return applicableBudget[subcategoryId] || 0;
+  },
+
+  // Get account allocations for a month
+  getAccountAllocations: (month) => {
+    const { budgets } = get();
+    const defaultTemplate = budgets.templates['default'];
+    const allocationHistory = defaultTemplate?.allocationHistory || {};
+
+    const result: Record<string, number> = {};
+
+    // Process each account's history
+    for (const [accountId, history] of Object.entries(allocationHistory)) {
+      // Find the most recent entry that is <= the given month
+      let applicableAmount = 0;
+      for (const entry of history) {
+        if (entry.startMonth <= month) {
+          applicableAmount = entry.amount;
+        } else {
+          break; // History is sorted, so we can stop early
+        }
+      }
+      if (applicableAmount > 0) {
+        result[accountId] = applicableAmount;
+      }
+    }
+
+    // Fall back to legacy accountAllocations if no history found
+    if (Object.keys(result).length === 0 && defaultTemplate?.accountAllocations) {
+      return defaultTemplate.accountAllocations;
+    }
+
+    return result;
+  },
+
+  // Get total budget expense for a month
+  getTotalBudgetExpense: (month) => {
+    const { budgets, categories } = get();
+    let total = 0;
+
+    for (const category of categories.categories.expense) {
+      total += get().getBudgetForCategory(category.id, month);
+    }
+
+    return total;
+  },
+
+  // Get budget settings date (the most recent change date that is <= the given month)
+  getBudgetSettingsDate: (month) => {
+    const { budgets } = get();
+    const defaultTemplate = budgets.templates['default'];
+    if (!defaultTemplate) return null;
+
+    let latestDate: string | null = null;
+
+    // Check salary history
+    const salaryHistory = defaultTemplate.salaryHistory || [];
+    for (const entry of salaryHistory) {
+      if (entry.startMonth <= month) {
+        if (!latestDate || entry.startMonth > latestDate) {
+          latestDate = entry.startMonth;
+        }
+      }
+    }
+
+    // Check expense history
+    const expenseHistory = defaultTemplate.expenseHistory || {};
+    for (const history of Object.values(expenseHistory)) {
+      for (const entry of history) {
+        if (entry.startMonth <= month) {
+          if (!latestDate || entry.startMonth > latestDate) {
+            latestDate = entry.startMonth;
+          }
+        }
+      }
+    }
+
+    // Check allocation history
+    const allocationHistory = defaultTemplate.allocationHistory || {};
+    for (const history of Object.values(allocationHistory)) {
+      for (const entry of history) {
+        if (entry.startMonth <= month) {
+          if (!latestDate || entry.startMonth > latestDate) {
+            latestDate = entry.startMonth;
+          }
+        }
+      }
+    }
+
+    return latestDate;
+  },
+
+  // Get unallocated amount (baseSalary - total expense budget - total account allocations)
+  getUnallocatedAmount: (month) => {
+    const baseSalary = get().getBaseSalary(month);
+    const totalExpenseBudget = get().getTotalBudgetExpense(month);
+    const accountAllocations = get().getAccountAllocations(month);
+    const totalAccountAllocations = Object.values(accountAllocations).reduce((sum, val) => sum + val, 0);
+
+    return baseSalary - totalExpenseBudget - totalAccountAllocations;
+  },
+
+  // Get monthly balance (income to account - expense from account)
   getMonthlyBalance: (month: string): number => {
     const data = get().getMonthlyData(month);
     const { accounts } = get();
     const flowRules = accounts.flowRules;
 
-    // Calculate income (all goes to account)
-    const totalIncome = Object.values(data.income).reduce<number>(
-      (sum, amount) => sum + getAmountTotal(amount),
-      0
-    );
-
-    // Calculate expense excluding pool (pool comes from pool account)
-    const expenseFromAccount = Object.entries(data.expense).reduce<number>(
+    // Calculate income that goes to 'account' (excluding income with toAccount set to other accounts)
+    const incomeToAccount = Object.entries(data.income).reduce<number>(
       (sum, [categoryId, amount]) => {
-        const rule = flowRules.expense[categoryId];
-        // If fromAccount is pool, don't count it in account balance
-        if (rule?.fromAccount === 'pool') {
+        const rule = flowRules.income[categoryId];
+        const toAccount = rule?.toAccount || 'account';
+        // Only count income that goes to 'account'
+        if (toAccount !== 'account') {
           return sum;
         }
         return sum + getAmountTotal(amount);
@@ -791,7 +1042,21 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       0
     );
 
-    return totalIncome - expenseFromAccount;
+    // Calculate expense from account (excluding pool and other special accounts)
+    const expenseFromAccount = Object.entries(data.expense).reduce<number>(
+      (sum, [categoryId, amount]) => {
+        const rule = flowRules.expense[categoryId];
+        const fromAccount = rule?.fromAccount || 'account';
+        // Only count expense from 'account'
+        if (fromAccount !== 'account') {
+          return sum;
+        }
+        return sum + getAmountTotal(amount);
+      },
+      0
+    );
+
+    return incomeToAccount - expenseFromAccount;
   },
 
   // Get calculated account balances based on all monthly data
@@ -807,13 +1072,15 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
 
     // Process each month's data
     for (const [, data] of monthlyData) {
-      // Add income to account
-      const totalIncome = Object.values(data.income).reduce<number>(
-        (sum, amount) => sum + getAmountTotal(amount),
-        0
-      );
-      if (balances['account'] !== undefined) {
-        balances['account'] += totalIncome;
+      // Add income based on flowRules (toAccount)
+      for (const [categoryId, amount] of Object.entries(data.income)) {
+        const rule = flowRules.income[categoryId];
+        const toAccount = rule?.toAccount || 'account'; // Default to 'account'
+        const incomeAmount = getAmountTotal(amount);
+
+        if (balances[toAccount] !== undefined) {
+          balances[toAccount] += incomeAmount;
+        }
       }
 
       // Subtract expenses based on flowRules
@@ -883,13 +1150,15 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       const data = monthlyData.get(month);
       if (!data) continue;
 
-      // Add income to account
-      const totalIncome = Object.values(data.income).reduce<number>(
-        (sum, amount) => sum + getAmountTotal(amount),
-        0
-      );
-      if (balances['account'] !== undefined) {
-        balances['account'] += totalIncome;
+      // Add income based on flowRules (toAccount)
+      for (const [categoryId, amount] of Object.entries(data.income)) {
+        const rule = flowRules.income[categoryId];
+        const toAccount = rule?.toAccount || 'account'; // Default to 'account'
+        const incomeAmount = getAmountTotal(amount);
+
+        if (balances[toAccount] !== undefined) {
+          balances[toAccount] += incomeAmount;
+        }
       }
 
       // Subtract expenses based on flowRules

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Wallet, GitBranch } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Waves } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -353,7 +353,7 @@ export default function TransactionsPage() {
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -395,111 +395,47 @@ export default function TransactionsPage() {
               </p>
             </CardContent>
           </Card>
+          {hasSaveAccount && hasAccountMain && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                  <ArrowRightLeft className="h-4 w-4" />
+                  月末精算
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-xl font-bold ${monthlyBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {monthlyBalance >= 0 ? '+' : ''}{formatCurrency(monthlyBalance)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {monthlyBalance >= 0 ? (
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <div>
+                          <p className="text-sm font-medium">黒字</p>
+                          <p className="text-xs text-muted-foreground">saveへ振替</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-red-600">
+                        <ArrowRightLeft className="h-4 w-4" />
+                        <div>
+                          <p className="text-sm font-medium">赤字</p>
+                          <p className="text-xs text-muted-foreground">saveから補填</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Month-end Settlement Card */}
-        {hasSaveAccount && hasAccountMain && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ArrowRightLeft className="h-4 w-4" />
-                月末精算
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    収支バランス（pool除く）
-                  </p>
-                  <p className={`text-xl font-bold ${monthlyBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {monthlyBalance >= 0 ? '+' : ''}{formatCurrency(monthlyBalance)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  {monthlyBalance >= 0 ? (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <div>
-                        <p className="text-sm font-medium">黒字</p>
-                        <p className="text-xs text-muted-foreground">saveへ自動振替</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-600">
-                      <ArrowRightLeft className="h-4 w-4" />
-                      <div>
-                        <p className="text-sm font-medium">赤字</p>
-                        <p className="text-xs text-muted-foreground">saveから自動補填</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Account Balances at Month End */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
-                月末時点の口座残高
-              </div>
-              <span className="text-base font-bold">
-                {formatCurrency(totalAssets)}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {accounts.accounts.map((account) => {
-                const balance = accountBalances[account.id] || 0;
-                return (
-                  <div
-                    key={account.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: account.color }}
-                      />
-                      <span className="text-sm">{account.name}</span>
-                    </div>
-                    <span className={`text-sm font-medium ${balance < 0 ? 'text-red-600' : ''}`}>
-                      {formatCurrency(balance)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Money Flow Diagram */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <GitBranch className="h-4 w-4" />
-              今月のお金の流れ
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AccountFlowDiagram
-              accounts={accounts.accounts}
-              transfers={monthlyData.transfers}
-              totalIncome={totalIncome}
-              monthlyBalance={monthlyBalance}
-              accountBalances={accountBalances}
-              expenseByAccount={expenseByAccount}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-3 gap-6">
           {/* Income */}
           <Card>
             <CardHeader>
@@ -529,11 +465,14 @@ export default function TransactionsPage() {
 
           {/* Expense */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
                 支出
               </CardTitle>
+              <Button size="icon" variant="outline" onClick={() => null/* アコーディオンを開閉 */}>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent className="space-y-3">
               {categories.categories.expense.length === 0 ? (
@@ -553,54 +492,73 @@ export default function TransactionsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Transfers */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                振替
+              </CardTitle>
+              <Button size="icon" onClick={() => setTransferDialogOpen(true)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {monthlyData.transfers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  振替がありません
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {monthlyData.transfers.map((transfer, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 border rounded-lg"
+                    >
+                      <span className="font-medium">{getAccountName(transfer.from)}</span>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{getAccountName(transfer.to)}</span>
+                      <span className="flex-1 text-sm text-muted-foreground">
+                        {transfer.note}
+                      </span>
+                      <span className="font-medium">{formatCurrency(transfer.amount)}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm('この振替を削除しますか？')) {
+                            removeTransfer(index);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Transfers */}
+        {/* Money Flow Diagram */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              振替
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Waves className="h-4 w-4" />
+              Flow
             </CardTitle>
-            <Button size="sm" onClick={() => setTransferDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              追加
-            </Button>
           </CardHeader>
           <CardContent>
-            {monthlyData.transfers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                振替がありません
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {monthlyData.transfers.map((transfer, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-3 border rounded-lg"
-                  >
-                    <span className="font-medium">{getAccountName(transfer.from)}</span>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{getAccountName(transfer.to)}</span>
-                    <span className="flex-1 text-sm text-muted-foreground">
-                      {transfer.note}
-                    </span>
-                    <span className="font-medium">{formatCurrency(transfer.amount)}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm('この振替を削除しますか？')) {
-                          removeTransfer(index);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <AccountFlowDiagram
+              accounts={accounts.accounts}
+              transfers={monthlyData.transfers}
+              totalIncome={totalIncome}
+              monthlyBalance={monthlyBalance}
+              accountBalances={accountBalances}
+              expenseByAccount={expenseByAccount}
+            />
           </CardContent>
         </Card>
       </div>
