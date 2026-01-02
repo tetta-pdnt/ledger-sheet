@@ -6,7 +6,7 @@ import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -43,8 +43,12 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
   // Chart filters
-  const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
-  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<string[]>(
+    categories.categories.income.map(c => c.id)
+  );
+  const [expenseCategories, setExpenseCategories] = useState<string[]>(
+    categories.categories.expense.map(c => c.id)
+  );
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
 
@@ -286,12 +290,10 @@ export default function DashboardPage() {
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {categories.categories.income.map(cat => (
                       <div key={cat.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           id={`income-${cat.id}`}
-                          checked={incomeCategories.length === 0 || incomeCategories.includes(cat.id)}
-                          onChange={() => toggleCategory('income', cat.id)}
-                          className="h-4 w-4"
+                          checked={incomeCategories.includes(cat.id)}
+                          onCheckedChange={() => toggleCategory('income', cat.id)}
                         />
                         <label htmlFor={`income-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
@@ -339,12 +341,10 @@ export default function DashboardPage() {
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {categories.categories.expense.map(cat => (
                       <div key={cat.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           id={`expense-${cat.id}`}
-                          checked={expenseCategories.length === 0 || expenseCategories.includes(cat.id)}
-                          onChange={() => toggleCategory('expense', cat.id)}
-                          className="h-4 w-4"
+                          checked={expenseCategories.includes(cat.id)}
+                          onCheckedChange={() => toggleCategory('expense', cat.id)}
                         />
                         <label htmlFor={`expense-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
