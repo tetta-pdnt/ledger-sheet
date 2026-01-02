@@ -1,4 +1,4 @@
-# Ledger Sheet
+# 🧺 Ledger Sheet
 Ledger Sheet is a Next.js-based web application specialized in managing household finances on a monthly basis.
 
 The name comes from the Japanese-English term “レジャーシート (leisure sheet)”, meaning something you can easily spread out and use anywhere.
