@@ -49,3 +49,6 @@ next-env.d.ts
 # Override global gitignore - include src/lib
 !src/lib/
 !src/lib/**
+
+.claude/
+.serena/

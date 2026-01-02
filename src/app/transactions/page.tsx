@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
-import { getCategoryTotal } from '@/lib/schemas';
+import { getCategoryTotal, getActiveCategories, isActiveForMonth } from '@/lib/schemas';
 import { AccountFlowDiagram } from '@/components/charts/account-flow-diagram';
 import type { Category, CategoryAmount, Transfer } from '@/lib/schemas';
 
@@ -32,10 +32,11 @@ interface CategoryInputProps {
   type: 'income' | 'expense';
   value: CategoryAmount | undefined;
   onChange: (amount: CategoryAmount) => void;
+  currentMonth: string;
 }
 
 // Freeform category input for pool-like categories
-function FreeformCategoryInput({ category, value, onChange }: Omit<CategoryInputProps, 'type'>) {
+function FreeformCategoryInput({ category, value, onChange, currentMonth }: Omit<CategoryInputProps, 'type'>) {
   const [expanded, setExpanded] = useState(false);
   const [newItemName, setNewItemName] = useState('');
 
@@ -159,15 +160,17 @@ function FreeformCategoryInput({ category, value, onChange }: Omit<CategoryInput
   );
 }
 
-function CategoryInput({ category, value, onChange }: CategoryInputProps) {
+function CategoryInput({ category, value, onChange, currentMonth }: CategoryInputProps) {
   const [expanded, setExpanded] = useState(false);
 
   // Use freeform input for pool category
   if (category.id === 'pool') {
-    return <FreeformCategoryInput category={category} value={value} onChange={onChange} />;
+    return <FreeformCategoryInput category={category} value={value} onChange={onChange} currentMonth={currentMonth} />;
   }
 
-  const hasSubcategories = category.subcategories.length > 0;
+  // Filter subcategories by active period
+  const activeSubcategories = category.subcategories.filter(sub => isActiveForMonth(sub, currentMonth));
+  const hasSubcategories = activeSubcategories.length > 0;
 
   // Determine if value is a breakdown (object) or simple number
   const isBreakdown = value !== undefined && typeof value === 'object';
@@ -213,8 +216,8 @@ function CategoryInput({ category, value, onChange }: CategoryInputProps) {
       // When expanding with a simple number, convert to breakdown
       const breakdown: Record<string, number> = {};
       if (total > 0) {
-        // Put all in first subcategory by default
-        breakdown[category.subcategories[0].id] = total;
+        // Put all in first active subcategory by default
+        breakdown[activeSubcategories[0].id] = total;
       }
       onChange(breakdown);
     }
@@ -259,7 +262,7 @@ function CategoryInput({ category, value, onChange }: CategoryInputProps) {
 
       {expanded && hasSubcategories && (
         <div className="mt-3 ml-9 space-y-2 border-l-2 pl-4">
-          {category.subcategories.map((subcat) => {
+          {activeSubcategories.map((subcat) => {
             const subcatValue = isBreakdown
               ? (value as Record<string, number>)[subcat.id] || 0
               : 0;
@@ -445,21 +448,25 @@ export default function TransactionsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {categories.categories.income.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  収入カテゴリがありません
-                </p>
-              ) : (
-                categories.categories.income.map((category) => (
-                  <CategoryInput
-                    key={category.id}
-                    category={category}
-                    type="income"
-                    value={monthlyData.income[category.id]}
-                    onChange={(amount) => setIncome(category.id, amount)}
-                  />
-                ))
-              )}
+              {(() => {
+                const activeIncomeCategories = getActiveCategories(categories.categories.income, currentMonth);
+                return activeIncomeCategories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    収入カテゴリがありません
+                  </p>
+                ) : (
+                  activeIncomeCategories.map((category) => (
+                    <CategoryInput
+                      key={category.id}
+                      category={category}
+                      type="income"
+                      value={monthlyData.income[category.id]}
+                      onChange={(amount) => setIncome(category.id, amount)}
+                      currentMonth={currentMonth}
+                    />
+                  ))
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -475,21 +482,25 @@ export default function TransactionsPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {categories.categories.expense.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  支出カテゴリがありません
-                </p>
-              ) : (
-                categories.categories.expense.map((category) => (
-                  <CategoryInput
-                    key={category.id}
-                    category={category}
-                    type="expense"
-                    value={monthlyData.expense[category.id]}
-                    onChange={(amount) => setExpense(category.id, amount)}
-                  />
-                ))
-              )}
+              {(() => {
+                const activeExpenseCategories = getActiveCategories(categories.categories.expense, currentMonth);
+                return activeExpenseCategories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    支出カテゴリがありません
+                  </p>
+                ) : (
+                  activeExpenseCategories.map((category) => (
+                    <CategoryInput
+                      key={category.id}
+                      category={category}
+                      type="expense"
+                      value={monthlyData.expense[category.id]}
+                      onChange={(amount) => setExpense(category.id, amount)}
+                      currentMonth={currentMonth}
+                    />
+                  ))
+                );
+              })()}
             </CardContent>
           </Card>
 

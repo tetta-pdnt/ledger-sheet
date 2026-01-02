@@ -205,18 +205,6 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-red-600">支出推移</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {chartDescription}支出
-              </p>
-            </CardHeader>
-            <CardContent>
-              <StackedAreaChart type="expense" periodType={periodType} selectedYear={selectedYear} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle className="text-green-600">収入推移</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {chartDescription}収入
@@ -226,42 +214,21 @@ export default function DashboardPage() {
               <StackedAreaChart type="income" periodType={periodType} selectedYear={selectedYear} />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-red-600">支出推移</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {chartDescription}支出
+              </p>
+            </CardHeader>
+            <CardContent>
+              <StackedAreaChart type="expense" periodType={periodType} selectedYear={selectedYear} />
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>支出内訳（{periodLabel}）</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {topExpenses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  支出データがありません
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {topExpenses.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <p className="text-sm font-medium">{item.name}</p>
-                      </div>
-                      <div className="text-sm font-medium text-red-600">
-                        -{formatCurrency(item.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>収入内訳（{periodLabel}）</CardTitle>
@@ -287,6 +254,39 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-sm font-medium text-green-600">
                         +{formatCurrency(item.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>支出内訳（{periodLabel}）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topExpenses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  支出データがありません
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {topExpenses.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <p className="text-sm font-medium">{item.name}</p>
+                      </div>
+                      <div className="text-sm font-medium text-red-600">
+                        -{formatCurrency(item.amount)}
                       </div>
                     </div>
                   ))}

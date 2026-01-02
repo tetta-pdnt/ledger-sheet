@@ -30,6 +30,8 @@ interface CategoryFormData {
 interface SubcategoryFormData {
   id: string;
   name: string;
+  startMonth: string;
+  endMonth: string;
 }
 
 export default function CategoriesPage() {
@@ -56,6 +58,8 @@ export default function CategoriesPage() {
   const [subFormData, setSubFormData] = useState<SubcategoryFormData>({
     id: '',
     name: '',
+    startMonth: '',
+    endMonth: '',
   });
 
   const toggleExpanded = (categoryId: string) => {
@@ -94,7 +98,7 @@ export default function CategoriesPage() {
   const handleAddSubcategory = (type: CategoryType, categoryId: string) => {
     setEditingSubcategory(null);
     setParentCategory({ type, categoryId });
-    setSubFormData({ id: '', name: '' });
+    setSubFormData({ id: '', name: '', startMonth: '', endMonth: '' });
     setSubcategoryFormOpen(true);
   };
 
@@ -105,7 +109,12 @@ export default function CategoriesPage() {
   ) => {
     setEditingSubcategory({ type, categoryId, subcategory });
     setParentCategory({ type, categoryId });
-    setSubFormData({ id: subcategory.id, name: subcategory.name });
+    setSubFormData({
+      id: subcategory.id,
+      name: subcategory.name,
+      startMonth: subcategory.startMonth || '',
+      endMonth: subcategory.endMonth || '',
+    });
     setSubcategoryFormOpen(true);
   };
 
@@ -158,6 +167,8 @@ export default function CategoriesPage() {
     const newSubcategory: Subcategory = {
       id: editingSubcategory ? subFormData.id : generateCategoryId(subFormData.name),
       name: subFormData.name,
+      ...(subFormData.startMonth && { startMonth: subFormData.startMonth }),
+      ...(subFormData.endMonth && { endMonth: subFormData.endMonth }),
     };
 
     let updatedSubcategories: Subcategory[];
@@ -232,7 +243,19 @@ export default function CategoriesPage() {
                   key={sub.id}
                   className="flex items-center justify-between pl-8 pr-2 py-2 rounded hover:bg-accent"
                 >
-                  <span className="text-sm">{sub.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{sub.name}</span>
+                    {(sub.startMonth || sub.endMonth) && (
+                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {sub.startMonth && sub.endMonth
+                          ? `${sub.startMonth} 〜 ${sub.endMonth}`
+                          : sub.startMonth
+                            ? `${sub.startMonth} 〜`
+                            : `〜 ${sub.endMonth}`
+                        }
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
@@ -371,6 +394,28 @@ export default function CategoriesPage() {
                 placeholder="サブカテゴリ名"
                 required
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>開始月</Label>
+                <Input
+                  type="month"
+                  value={subFormData.startMonth}
+                  onChange={(e) => setSubFormData({ ...subFormData, startMonth: e.target.value })}
+                  placeholder="YYYY-MM"
+                />
+                <p className="text-xs text-muted-foreground">空欄 = 最初から有効</p>
+              </div>
+              <div className="space-y-2">
+                <Label>終了月</Label>
+                <Input
+                  type="month"
+                  value={subFormData.endMonth}
+                  onChange={(e) => setSubFormData({ ...subFormData, endMonth: e.target.value })}
+                  placeholder="YYYY-MM"
+                />
+                <p className="text-xs text-muted-foreground">空欄 = 無期限</p>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button

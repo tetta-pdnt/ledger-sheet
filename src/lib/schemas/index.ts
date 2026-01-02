@@ -4,6 +4,8 @@ import { z } from 'zod';
 export const subcategorySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(), // 有効開始月 (YYYY-MM)
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(), // 有効終了月 (YYYY-MM)
 });
 
 // Category schema
@@ -13,6 +15,8 @@ export const categorySchema = z.object({
   icon: z.string().default('circle'),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#6B7280'),
   subcategories: z.array(subcategorySchema).default([]),
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(), // 有効開始月 (YYYY-MM)
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(), // 有効終了月 (YYYY-MM)
 });
 
 // Categories data schema
@@ -230,4 +234,39 @@ export function getCategoryTotal(amount: CategoryAmount): number {
     return amount;
   }
   return Object.values(amount).reduce((sum, val) => sum + val, 0);
+}
+
+// Helper function to check if a category/subcategory is active for a given month
+export function isActiveForMonth(
+  item: { startMonth?: string; endMonth?: string },
+  month: string
+): boolean {
+  if (item.startMonth && month < item.startMonth) {
+    return false; // Not yet started
+  }
+  if (item.endMonth && month > item.endMonth) {
+    return false; // Already ended
+  }
+  return true;
+}
+
+// Helper function to filter active subcategories for a given month
+export function getActiveSubcategories(
+  category: Category,
+  month: string
+): Subcategory[] {
+  return category.subcategories.filter(sub => isActiveForMonth(sub, month));
+}
+
+// Helper function to filter active categories for a given month
+export function getActiveCategories(
+  categories: Category[],
+  month: string
+): Category[] {
+  return categories
+    .filter(cat => isActiveForMonth(cat, month))
+    .map(cat => ({
+      ...cat,
+      subcategories: getActiveSubcategories(cat, month),
+    }));
 }

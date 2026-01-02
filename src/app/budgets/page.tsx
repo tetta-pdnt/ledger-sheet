@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveCategories, isActiveForMonth } from '@/lib/schemas';
 
 // Format YYYY-MM to display format
 function formatSettingsDate(date: string): string {
@@ -52,7 +53,7 @@ export default function BudgetsPage() {
   const [editing, setEditing] = useState<EditingState>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
-  const expenseCategories = categories.categories.expense;
+  const expenseCategories = getActiveCategories(categories.categories.expense, currentMonth);
   const baseSalary = getBaseSalary(currentMonth);
   const totalExpenseBudget = getTotalBudgetExpense(currentMonth);
   const accountAllocations = getAccountAllocations(currentMonth);
