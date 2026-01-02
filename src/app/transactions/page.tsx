@@ -307,6 +307,7 @@ export default function TransactionsPage() {
     getTotalExpense,
     getMonthlyBalance,
     getAccountBalancesUpToMonth,
+    getPoolYearlyReset,
   } = useLedgerStore();
 
   const monthlyData = getMonthlyData(currentMonth);
@@ -336,6 +337,8 @@ export default function TransactionsPage() {
     const expenseAmount = getCategoryTotal(amount);
     expenseByAccount[fromAccount] = (expenseByAccount[fromAccount] || 0) + expenseAmount;
   }
+
+  const poolYearlyReset = getPoolYearlyReset(currentMonth);
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
@@ -620,6 +623,7 @@ export default function TransactionsPage() {
               accountBalances={accountBalances}
               expenseByAccount={expenseByAccount}
               incomeByAccount={incomeByAccount}
+              poolYearlyReset={poolYearlyReset}
             />
           </CardContent>
         </Card>

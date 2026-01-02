@@ -12,6 +12,7 @@ interface AccountFlowDiagramProps {
   accountBalances: Record<string, number>;
   expenseByAccount: Record<string, number>;
   incomeByAccount: Record<string, number>; // Income destination by account
+  poolYearlyReset: { amount: number; direction: 'pool-to-save' | 'save-to-pool' } | null;
 }
 
 interface NodePosition {
@@ -29,6 +30,7 @@ export function AccountFlowDiagram({
   accountBalances,
   expenseByAccount,
   incomeByAccount,
+  poolYearlyReset,
 }: AccountFlowDiagramProps) {
   const width = 700;
   const height = 350;
@@ -179,8 +181,27 @@ export function AccountFlowDiagram({
       });
     }
 
+    // Pool yearly reset
+    if (poolYearlyReset && nodePositions['pool'] && nodePositions['save']) {
+      const key = getFlowKey(
+        poolYearlyReset.direction === 'pool-to-save' ? 'pool' : 'save',
+        poolYearlyReset.direction === 'pool-to-save' ? 'save' : 'pool'
+      );
+      const index = flowCount[key] || 0;
+      flowCount[key] = index + 1;
+
+      result.push({
+        from: poolYearlyReset.direction === 'pool-to-save' ? 'pool' : 'save',
+        to: poolYearlyReset.direction === 'pool-to-save' ? 'save' : 'pool',
+        amount: poolYearlyReset.amount,
+        label: 'pool年次リセット',
+        color: '#F59E0B', // amber color
+        offsetIndex: index,
+      });
+    }
+
     return result;
-  }, [transfers, totalIncome, monthlyBalance, expenseByAccount, incomeByAccount, nodePositions]);
+  }, [transfers, totalIncome, monthlyBalance, expenseByAccount, incomeByAccount, nodePositions, poolYearlyReset]);
 
   const getAccountName = (id: string) => {
     if (id === 'income') return '収入';

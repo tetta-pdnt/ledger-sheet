@@ -265,6 +265,9 @@ interface LedgerState {
   };
   getAvailableYears: () => number[];
 
+  // Pool yearly reset (get info for display)
+  getPoolYearlyReset: (month: string) => { amount: number; direction: 'pool-to-save' | 'save-to-pool' } | null;
+
   // Reset
   reset: () => void;
 }
@@ -1124,6 +1127,17 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         balances['save'] += netBalance;
         balances['account'] -= netBalance;
       }
+
+      // Pool yearly reset at year-end
+      const [, month] = data.month.split('-');
+      if (month === '03' && balances['pool'] !== undefined && balances['save'] !== undefined) {
+        const poolBalance = balances['pool'];
+        if (poolBalance !== 0) {
+          // Transfer pool balance to/from save
+          balances['save'] += poolBalance;
+          balances['pool'] = 0;
+        }
+      }
     }
 
     return balances;
@@ -1197,6 +1211,17 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         balances['save'] += netBalance;
         balances['account'] -= netBalance;
       }
+
+      // Pool yearly reset at year-end
+      const [, monthNum] = month.split('-');
+      if (monthNum === '03' && balances['pool'] !== undefined && balances['save'] !== undefined) {
+        const poolBalance = balances['pool'];
+        if (poolBalance !== 0) {
+          // Transfer pool balance to/from save
+          balances['save'] += poolBalance;
+          balances['pool'] = 0;
+        }
+      }
     }
 
     return balances;
@@ -1252,7 +1277,98 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     };
   },
 
-  // Reset store
+  getPoolYearlyReset: (month: string): { amount: number; direction: 'pool-to-save' | 'save-to-pool' } | null => {
+    const [, monthNum] = month.split('-');
+
+    // Only apply reset in March
+    if (monthNum !== '03') {
+      return null;
+    }
+
+    const { accounts } = get();
+
+    // Check if pool and save accounts exist
+    if (!accounts.accounts.find(a => a.id === 'pool') || !accounts.accounts.find(a => a.id === 'save')) {
+      return null;
+    }
+
+    const balances = get().getAccountBalancesUpToMonth(month);
+
+    const { accounts: accs, monthlyData } = get();
+    const flowRules = accs.flowRules;
+
+    const tempBalances: Record<string, number> = {};
+    for (const account of accs.accounts) {
+      tempBalances[account.id] = account.initialBalance;
+    }
+
+    const sortedMonths = Array.from(monthlyData.keys())
+      .filter(m => m <= month)
+      .sort();
+
+    for (const m of sortedMonths) {
+      const data = monthlyData.get(m);
+      if (!data) continue;
+
+      // Add income
+      for (const [categoryId, amount] of Object.entries(data.income)) {
+        const rule = flowRules.income[categoryId];
+        const toAccount = rule?.toAccount || 'account';
+        const incomeAmount = getAmountTotal(amount);
+        if (tempBalances[toAccount] !== undefined) {
+          tempBalances[toAccount] += incomeAmount;
+        }
+      }
+
+      // Subtract expenses
+      for (const [categoryId, amount] of Object.entries(data.expense)) {
+        const rule = flowRules.expense[categoryId];
+        const fromAccount = rule?.fromAccount || 'account';
+        const expenseAmount = getAmountTotal(amount);
+        if (tempBalances[fromAccount] !== undefined) {
+          tempBalances[fromAccount] -= expenseAmount;
+        }
+      }
+
+      // Process transfers
+      for (const transfer of data.transfers) {
+        if (tempBalances[transfer.from] !== undefined) {
+          tempBalances[transfer.from] -= transfer.amount;
+        }
+        if (tempBalances[transfer.to] !== undefined) {
+          tempBalances[transfer.to] += transfer.amount;
+        }
+      }
+
+      // Auto-settlement
+      const monthlyBalance = get().getMonthlyBalance(m);
+      const transfersFromAccount = data.transfers
+        .filter(t => t.from === 'account')
+        .reduce((sum, t) => sum + t.amount, 0);
+      const transfersToAccount = data.transfers
+        .filter(t => t.to === 'account')
+        .reduce((sum, t) => sum + t.amount, 0);
+      const netBalance = monthlyBalance - transfersFromAccount + transfersToAccount;
+
+      if (tempBalances['save'] !== undefined && tempBalances['account'] !== undefined) {
+        tempBalances['save'] += netBalance;
+        tempBalances['account'] -= netBalance;
+      }
+
+    }
+
+    const poolBalanceBeforeReset = tempBalances['pool'] || 0;
+
+    if (poolBalanceBeforeReset === 0) {
+      return null;
+    }
+
+    return {
+      amount: Math.abs(poolBalanceBeforeReset),
+      direction: poolBalanceBeforeReset > 0 ? 'pool-to-save' : 'save-to-pool',
+    };
+  },
+
   reset: () => {
     clearHandles();
     clearAllYamlCache();
