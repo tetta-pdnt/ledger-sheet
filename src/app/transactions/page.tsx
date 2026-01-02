@@ -319,6 +319,15 @@ export default function TransactionsPage() {
   const accountBalances = getAccountBalancesUpToMonth(currentMonth);
   const totalAssets = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
 
+  // Calculate income by account based on flowRules
+  const incomeByAccount: Record<string, number> = {};
+  for (const [categoryId, amount] of Object.entries(monthlyData.income)) {
+    const rule = accounts.flowRules.income?.[categoryId];
+    const toAccount = rule?.toAccount || 'account';
+    const incomeAmount = getCategoryTotal(amount);
+    incomeByAccount[toAccount] = (incomeByAccount[toAccount] || 0) + incomeAmount;
+  }
+
   // Calculate expense by account based on flowRules
   const expenseByAccount: Record<string, number> = {};
   for (const [categoryId, amount] of Object.entries(monthlyData.expense)) {
@@ -610,6 +619,7 @@ export default function TransactionsPage() {
               monthlyBalance={monthlyBalance}
               accountBalances={accountBalances}
               expenseByAccount={expenseByAccount}
+              incomeByAccount={incomeByAccount}
             />
           </CardContent>
         </Card>

@@ -20,8 +20,11 @@ import { ja } from 'date-fns/locale';
 interface StackedAreaChartProps {
   type: 'income' | 'expense';
   months?: number;
-  periodType?: 'all' | 'year';
+  periodType?: 'all' | 'year' | 'range';
   selectedYear?: number;
+  startMonth?: string; // YYYY-MM format
+  endMonth?: string; // YYYY-MM format
+  selectedCategories?: string[]; // category IDs to display
 }
 
 export function StackedAreaChart({
@@ -29,6 +32,9 @@ export function StackedAreaChart({
   months = 6,
   periodType,
   selectedYear,
+  startMonth,
+  endMonth,
+  selectedCategories,
 }: StackedAreaChartProps) {
   const { categories, getMonthlyData, currentMonth, monthlyData } = useLedgerStore();
 
@@ -40,7 +46,32 @@ export function StackedAreaChart({
   const chartData = useMemo(() => {
     const data: Record<string, string | number>[] = [];
 
-    if (periodType === 'all') {
+    if (periodType === 'range' && startMonth && endMonth) {
+      // Show months in specified range
+      const allMonths = Array.from(monthlyData.keys())
+        .filter(m => m >= startMonth && m <= endMonth)
+        .sort();
+
+      for (const monthKey of allMonths) {
+        const monthDate = parse(monthKey, 'yyyy-MM', new Date());
+        const monthLabel = format(monthDate, 'M月', { locale: ja });
+
+        const monthData = getMonthlyData(monthKey);
+        const amounts = type === 'income' ? monthData.income : monthData.expense;
+
+        const dataPoint: Record<string, string | number> = {
+          month: monthLabel,
+          monthKey,
+        };
+
+        categoryList.forEach((cat) => {
+          const amount = amounts[cat.id];
+          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+        });
+
+        data.push(dataPoint);
+      }
+    } else if (periodType === 'all') {
       // Show all available months
       const allMonths = Array.from(monthlyData.keys()).sort();
       for (const monthKey of allMonths) {
@@ -113,14 +144,22 @@ export function StackedAreaChart({
     }
 
     return data;
-  }, [currentMonth, months, type, categoryList, getMonthlyData, monthlyData, periodType, selectedYear]);
+  }, [currentMonth, months, type, categoryList, getMonthlyData, monthlyData, periodType, selectedYear, startMonth, endMonth]);
 
   // Filter categories that have at least some data
   const activeCategories = useMemo(() => {
-    return categoryList.filter((cat) =>
+    let filteredList = categoryList;
+
+    // Filter by selected categories if specified
+    if (selectedCategories && selectedCategories.length > 0) {
+      filteredList = categoryList.filter(cat => selectedCategories.includes(cat.id));
+    }
+
+    // Filter categories that have at least some data
+    return filteredList.filter((cat) =>
       chartData.some((d) => (d[cat.id] as number) > 0)
     );
-  }, [categoryList, chartData]);
+  }, [categoryList, chartData, selectedCategories]);
 
   const CustomTooltip = ({ active, payload, label }: {
     active?: boolean;

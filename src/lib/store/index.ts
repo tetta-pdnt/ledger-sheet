@@ -257,7 +257,7 @@ interface LedgerState {
   getCalculatedAccountBalances: () => Record<string, number>;
   getAccountBalancesUpToMonth: (month: string) => Record<string, number>;
   getMonthlyBalance: (month: string) => number;
-  getPeriodTotals: (period: 'year' | 'all', year?: number) => {
+  getPeriodTotals: (period: 'year' | 'all' | 'range', year?: number, startMonth?: string, endMonth?: string) => {
     income: number;
     expense: number;
     balance: number;
@@ -1214,17 +1214,19 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
   },
 
   // Get totals for a period (year or all time)
-  getPeriodTotals: (period, year) => {
+  getPeriodTotals: (period, year, startMonth, endMonth) => {
     const { monthlyData } = get();
     let totalIncome = 0;
     let totalExpense = 0;
     const months: string[] = [];
 
     for (const [month, data] of monthlyData) {
-      // Filter by year if period is 'year'
+      // Filter by period type
       if (period === 'year' && year) {
         const dataYear = parseInt(month.split('-')[0]);
         if (dataYear !== year) continue;
+      } else if (period === 'range' && startMonth && endMonth) {
+        if (month < startMonth || month > endMonth) continue;
       }
 
       months.push(month);

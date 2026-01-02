@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar, Filter } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -12,11 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 
-type PeriodType = 'all' | 'year';
+type PeriodType = 'all' | 'year' | 'range';
 
 export default function DashboardPage() {
   const {
@@ -33,8 +42,35 @@ export default function DashboardPage() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
+  // Chart filters
+  const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
+  const [startMonth, setStartMonth] = useState('');
+  const [endMonth, setEndMonth] = useState('');
+
+  const toggleCategory = (type: 'income' | 'expense', categoryId: string) => {
+    if (type === 'income') {
+      setIncomeCategories(prev =>
+        prev.includes(categoryId)
+          ? prev.filter(id => id !== categoryId)
+          : [...prev, categoryId]
+      );
+    } else {
+      setExpenseCategories(prev =>
+        prev.includes(categoryId)
+          ? prev.filter(id => id !== categoryId)
+          : [...prev, categoryId]
+      );
+    }
+  };
+
   // Get period totals based on selection
-  const periodTotals = getPeriodTotals(periodType, periodType === 'year' ? selectedYear : undefined);
+  const periodTotals = getPeriodTotals(
+    periodType,
+    periodType === 'year' ? selectedYear : undefined,
+    periodType === 'range' ? startMonth : undefined,
+    periodType === 'range' ? endMonth : undefined
+  );
   const { income: totalIncome, expense: totalExpense, balance, months } = periodTotals;
 
   // Get dynamically calculated account balances
@@ -114,7 +150,33 @@ export default function DashboardPage() {
             >
               年単位
             </Button>
+            <Button
+              variant={periodType === 'range' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriodType('range')}
+            >
+              範囲指定
+            </Button>
           </div>
+          {periodType === 'range' && (
+            <>
+              <Input
+                type="month"
+                value={startMonth}
+                onChange={(e) => setStartMonth(e.target.value)}
+                className="w-40"
+                placeholder="開始月"
+              />
+              <span className="text-sm text-muted-foreground">〜</span>
+              <Input
+                type="month"
+                value={endMonth}
+                onChange={(e) => setEndMonth(e.target.value)}
+                className="w-40"
+                placeholder="終了月"
+              />
+            </>
+          )}
           {periodType === 'year' && (
             <Select
               value={selectedYear.toString()}
@@ -204,26 +266,108 @@ export default function DashboardPage() {
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-green-600">収入推移</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {chartDescription}収入
-              </p>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-green-600">収入推移</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {chartDescription}収入
+                </p>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>表示カテゴリ選択</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {categories.categories.income.map(cat => (
+                      <div key={cat.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`income-${cat.id}`}
+                          checked={incomeCategories.length === 0 || incomeCategories.includes(cat.id)}
+                          onChange={() => toggleCategory('income', cat.id)}
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor={`income-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                          <span className="text-sm">{cat.name}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={() => setIncomeCategories([])} variant="outline" size="sm">
+                    全て選択
+                  </Button>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
-              <StackedAreaChart type="income" periodType={periodType} selectedYear={selectedYear} />
+              <StackedAreaChart
+                type="income"
+                periodType={periodType}
+                selectedYear={selectedYear}
+                startMonth={startMonth}
+                endMonth={endMonth}
+                selectedCategories={incomeCategories.length > 0 ? incomeCategories : undefined}
+              />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-red-600">支出推移</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {chartDescription}支出
-              </p>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-red-600">支出推移</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {chartDescription}支出
+                </p>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>表示カテゴリ選択</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {categories.categories.expense.map(cat => (
+                      <div key={cat.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`expense-${cat.id}`}
+                          checked={expenseCategories.length === 0 || expenseCategories.includes(cat.id)}
+                          onChange={() => toggleCategory('expense', cat.id)}
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor={`expense-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                          <span className="text-sm">{cat.name}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={() => setExpenseCategories([])} variant="outline" size="sm">
+                    全て選択
+                  </Button>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
-              <StackedAreaChart type="expense" periodType={periodType} selectedYear={selectedYear} />
+              <StackedAreaChart
+                type="expense"
+                periodType={periodType}
+                selectedYear={selectedYear}
+                startMonth={startMonth}
+                endMonth={endMonth}
+                selectedCategories={expenseCategories.length > 0 ? expenseCategories : undefined}
+              />
             </CardContent>
           </Card>
         </div>
