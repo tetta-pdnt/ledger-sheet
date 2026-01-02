@@ -33,11 +33,12 @@ interface CategoryInputProps {
   value: CategoryAmount | undefined;
   onChange: (amount: CategoryAmount) => void;
   currentMonth: string;
+  expanded: boolean;
+  onExpandChange: (expanded: boolean) => void;
 }
 
 // Freeform category input for pool-like categories
-function FreeformCategoryInput({ category, value, onChange, currentMonth }: Omit<CategoryInputProps, 'type'>) {
-  const [expanded, setExpanded] = useState(false);
+function FreeformCategoryInput({ category, value, onChange, currentMonth, expanded, onExpandChange }: Omit<CategoryInputProps, 'type'>) {
   const [newItemName, setNewItemName] = useState('');
 
   const isBreakdown = value !== undefined && typeof value === 'object';
@@ -82,7 +83,7 @@ function FreeformCategoryInput({ category, value, onChange, currentMonth }: Omit
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => onExpandChange(!expanded)}
         >
           {expanded ? (
             <ChevronDown className="h-4 w-4" />
@@ -141,7 +142,11 @@ function FreeformCategoryInput({ category, value, onChange, currentMonth }: Omit
               className="flex-1 text-sm"
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  handleAddItem();
+                }
+              }}
               placeholder="項目名を入力..."
             />
             <Button
@@ -160,12 +165,10 @@ function FreeformCategoryInput({ category, value, onChange, currentMonth }: Omit
   );
 }
 
-function CategoryInput({ category, value, onChange, currentMonth }: CategoryInputProps) {
-  const [expanded, setExpanded] = useState(false);
-
+function CategoryInput({ category, value, onChange, currentMonth, expanded, onExpandChange }: CategoryInputProps) {
   // Use freeform input for pool category
   if (category.id === 'pool') {
-    return <FreeformCategoryInput category={category} value={value} onChange={onChange} currentMonth={currentMonth} />;
+    return <FreeformCategoryInput category={category} value={value} onChange={onChange} currentMonth={currentMonth} expanded={expanded} onExpandChange={onExpandChange} />;
   }
 
   // Filter subcategories by active period
@@ -221,7 +224,7 @@ function CategoryInput({ category, value, onChange, currentMonth }: CategoryInpu
       }
       onChange(breakdown);
     }
-    setExpanded(!expanded);
+    onExpandChange(!expanded);
   };
 
   return (
@@ -333,6 +336,21 @@ export default function TransactionsPage() {
     note: '',
   });
 
+  // Category expansion state
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleAllCategories = (type: 'income' | 'expense', expand: boolean) => {
+    const activeCategories = type === 'income'
+      ? getActiveCategories(categories.categories.income, currentMonth)
+      : getActiveCategories(categories.categories.expense, currentMonth);
+
+    const newState = { ...expandedCategories };
+    activeCategories.forEach(cat => {
+      newState[cat.id] = expand;
+    });
+    setExpandedCategories(newState);
+  };
+
   const handleAddTransfer = () => {
     if (newTransfer.from && newTransfer.to && newTransfer.amount && newTransfer.amount > 0) {
       addTransfer({
@@ -441,11 +459,22 @@ export default function TransactionsPage() {
         <div className="grid grid-cols-3 gap-6">
           {/* Income */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500" />
                 収入
               </CardTitle>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => {
+                  const allExpanded = getActiveCategories(categories.categories.income, currentMonth)
+                    .every(cat => expandedCategories[cat.id]);
+                  toggleAllCategories('income', !allExpanded);
+                }}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent className="space-y-3">
               {(() => {
@@ -463,6 +492,8 @@ export default function TransactionsPage() {
                       value={monthlyData.income[category.id]}
                       onChange={(amount) => setIncome(category.id, amount)}
                       currentMonth={currentMonth}
+                      expanded={expandedCategories[category.id] || false}
+                      onExpandChange={(expanded) => setExpandedCategories({ ...expandedCategories, [category.id]: expanded })}
                     />
                   ))
                 );
@@ -477,7 +508,15 @@ export default function TransactionsPage() {
                 <div className="w-3 h-3 rounded-full bg-red-500" />
                 支出
               </CardTitle>
-              <Button size="icon" variant="outline" onClick={() => null/* アコーディオンを開閉 */}>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => {
+                  const allExpanded = getActiveCategories(categories.categories.expense, currentMonth)
+                    .every(cat => expandedCategories[cat.id]);
+                  toggleAllCategories('expense', !allExpanded);
+                }}
+              >
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -497,6 +536,8 @@ export default function TransactionsPage() {
                       value={monthlyData.expense[category.id]}
                       onChange={(amount) => setExpense(category.id, amount)}
                       currentMonth={currentMonth}
+                      expanded={expandedCategories[category.id] || false}
+                      onExpandChange={(expanded) => setExpandedCategories({ ...expandedCategories, [category.id]: expanded })}
                     />
                   ))
                 );
