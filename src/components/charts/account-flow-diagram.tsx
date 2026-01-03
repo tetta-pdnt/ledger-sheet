@@ -22,6 +22,8 @@ interface NodePosition {
   height: number;
 }
 
+type Direction = 'right' | 'left' | 'top' | 'bottom';
+
 export function AccountFlowDiagram({
   accounts,
   transfers,
@@ -233,20 +235,31 @@ export function AccountFlowDiagram({
     return accountBalances[id] || 0;
   };
 
-  // Calculate arrow path between two nodes
-  const getArrowPath = (from: NodePosition, to: NodePosition, offsetIndex = 0, totalCount = 1) => {
-    const fromCenterX = from.x + from.width / 2;
-    const fromCenterY = from.y + from.height / 2;
-    const toCenterX = to.x + to.width / 2;
-    const toCenterY = to.y + to.height / 2;
+  const getCenter = (pos: NodePosition) => {
+    return {
+      x: pos.x + pos.width / 2,
+      y: pos.y + pos.height / 2,
+    };
+  }
+
+  const getDirection = (from: NodePosition, to: NodePosition): Direction => {
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
     const dx = toCenterX - fromCenterX;
     const dy = toCenterY - fromCenterY;
-    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
+    const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
 
-    // Determine direction
-    const isBelow = deg >= 45 && deg < 135;
-    const isRight = deg >= -45 && deg < 45;
-    const isLeft = deg >= 135 || deg < -135;
+    if (angle >= 45  && angle < 135) return 'bottom';
+    if (angle >= 135 && angle < 225) return 'left';
+    if (angle >= 225 && angle < 315) return 'top';
+    return 'right';
+  }
+
+  // Calculate arrow path between two nodes
+  const getArrowPath = (from: NodePosition, to: NodePosition, offsetIndex = 0, totalCount = 1) => {
+    const direction = getDirection(from, to);
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
 
     let startX: number, startY: number, endX: number, endY: number;
 
@@ -254,17 +267,17 @@ export function AccountFlowDiagram({
     // Calculate offset from center: distribute arrows symmetrically around center
     const offset = (offsetIndex - (totalCount - 1) / 2) * gap;
 
-    if (isBelow) {
+    if (direction === 'bottom') {
       startX = fromCenterX + offset;
       startY = from.y + from.height;
       endX = toCenterX + offset;
       endY = to.y - 14;
-    } else if (isRight) {
+    } else if (direction === 'right') {
       startX = from.x + from.width;
       startY = fromCenterY + offset;
       endX = to.x - 14;
       endY = toCenterY + offset;
-    } else if (isLeft) {
+    } else if (direction === 'left') {
       startX = from.x;
       startY = fromCenterY + offset;
       endX = to.x + to.width + 14;
@@ -277,10 +290,10 @@ export function AccountFlowDiagram({
     }
 
     // Curved path
-    if (isBelow) {
+    if (direction === 'bottom') {
       const midY = (startY + endY) / 2;
       return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-    } else if (isRight || isLeft) {
+    } else if (direction === 'right' || direction === 'left') {
       const midX = (startX + endX) / 2;
       return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
     } else {
@@ -291,34 +304,26 @@ export function AccountFlowDiagram({
 
   // Get arrow position for label
   const getArrowMidpoint = (from: NodePosition, to: NodePosition, offsetIndex = 0, totalCount = 1) => {
-    const fromCenterX = from.x + from.width / 2;
-    const fromCenterY = from.y + from.height / 2;
-    const toCenterX = to.x + to.width / 2;
-    const toCenterY = to.y + to.height / 2;
-    const dx = toCenterX - fromCenterX;
-    const dy = toCenterY - fromCenterY;
-    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
-
-    const isBelow = deg >= 45 && deg < 135;
-    const isRight = deg >= -45 && deg < 45;
-    const isLeft  = deg >= 135 || deg < -135;
+    const direction = getDirection(from, to);
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
 
     let startX: number, startY: number, endX: number, endY: number;
 
     const gap = 24;
     const offset = (offsetIndex - (totalCount - 1) / 2) * gap;
 
-    if (isBelow) {
+    if (direction === 'bottom') {
       startX = fromCenterX + offset;
       startY = from.y + from.height;
       endX = toCenterX + offset;
       endY = to.y - 14;
-    } else if (isRight) {
+    } else if (direction === 'right') {
       startX = from.x + from.width;
       startY = fromCenterY + offset;
       endX = to.x - 14;
       endY = toCenterY + offset;
-    } else if (isLeft) {
+    } else if (direction === 'left') {
       startX = from.x;
       startY = fromCenterY + offset;
       endX = to.x + to.width + 14;
