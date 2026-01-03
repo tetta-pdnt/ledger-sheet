@@ -19,10 +19,10 @@ import { useLedgerStore } from '@/lib/store';
 const navigation = [
   { name: 'ダッシュボード', href: '/', icon: LayoutDashboard },
   { name: '月次収支', href: '/transactions', icon: Receipt },
-  { name: '定期項目', href: '/recurrings', icon: RefreshCw },
-  { name: 'カテゴリ', href: '/categories', icon: Tags },
-  { name: '口座', href: '/accounts', icon: Wallet },
   { name: '予算', href: '/budgets', icon: PiggyBank },
+  { name: '定期項目', href: '/recurrings', icon: RefreshCw },
+  { name: '口座', href: '/accounts', icon: Wallet },
+  { name: 'カテゴリ', href: '/categories', icon: Tags },
   { name: 'サンキー図', href: '/sankey', icon: GitGraph },
   { name: '設定', href: '/settings', icon: Settings },
 ];
@@ -69,7 +69,7 @@ export function Sidebar() {
         ) : isLoaded ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="h-2 w-2 rounded-full bg-green-500" />
-            データ読み込み済み
+            データ接続済み
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -77,18 +77,7 @@ export function Sidebar() {
             起動中...
           </div>
         )}
-        
-        <div className="text-xs text-muted-foreground space-y-1">
-          <div className="font-medium">キーボードショートカット</div>
-          <div className="flex justify-between">
-            <span>← →</span>
-            <span>月の移動</span>
-          </div>
-          <div className="flex justify-between">
-            <span>↑ ↓</span>
-            <span>ページ移動</span>
-          </div>
-        </div>
+
       </div>
     </div>
   );

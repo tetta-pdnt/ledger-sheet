@@ -8,10 +8,10 @@ import { useLedgerStore } from '@/lib/store';
 const navigationRoutes = [
   '/',
   '/transactions',
-  '/recurrings',
-  '/categories',
-  '/accounts',
   '/budgets',
+  '/recurrings',
+  '/accounts',
+  '/categories',
   '/sankey',
   '/settings',
 ];
