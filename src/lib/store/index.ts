@@ -1059,7 +1059,17 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       0
     );
 
-    return incomeToAccount - expenseFromAccount;
+    // Calculate transfers from 'account'
+    const transfersFromAccount = data.transfers
+      .filter(t => t.from === 'account')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Calculate transfers to 'account'
+    const transfersToAccount = data.transfers
+      .filter(t => t.to === 'account')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return incomeToAccount - expenseFromAccount - transfersFromAccount + transfersToAccount;
   },
 
   // Get calculated account balances based on all monthly data
@@ -1108,17 +1118,8 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       }
 
       // Auto-settlement: remaining balance in account goes to/from save
-      // Calculate what's left in account after income, expense, and transfers
-      const monthlyBalance = get().getMonthlyBalance(data.month);
-      const transfersFromAccount = data.transfers
-        .filter(t => t.from === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const transfersToAccount = data.transfers
-        .filter(t => t.to === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      // Net balance after explicit transfers
-      const netBalance = monthlyBalance - transfersFromAccount + transfersToAccount;
+      // monthlyBalance already includes all transfers
+      const netBalance = get().getMonthlyBalance(data.month);
 
       // Auto-transfer to/from save
       if (balances['save'] !== undefined && balances['account'] !== undefined) {
@@ -1197,15 +1198,7 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       }
 
       // Auto-settlement
-      const monthlyBalance = get().getMonthlyBalance(month);
-      const transfersFromAccount = data.transfers
-        .filter(t => t.from === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const transfersToAccount = data.transfers
-        .filter(t => t.to === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const netBalance = monthlyBalance - transfersFromAccount + transfersToAccount;
+      const netBalance = get().getMonthlyBalance(month);
 
       if (balances['save'] !== undefined && balances['account'] !== undefined) {
         balances['save'] += netBalance;
@@ -1341,14 +1334,7 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
       }
 
       // Auto-settlement
-      const monthlyBalance = get().getMonthlyBalance(m);
-      const transfersFromAccount = data.transfers
-        .filter(t => t.from === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const transfersToAccount = data.transfers
-        .filter(t => t.to === 'account')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const netBalance = monthlyBalance - transfersFromAccount + transfersToAccount;
+      const netBalance = get().getMonthlyBalance(m);
 
       if (tempBalances['save'] !== undefined && tempBalances['account'] !== undefined) {
         tempBalances['save'] += netBalance;
