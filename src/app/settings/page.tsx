@@ -40,6 +40,14 @@ export default function SettingsPage() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
+      const updatedSettings = {
+        ...localSettings,
+        theme: (theme || 'system') as 'light' | 'dark' | 'system',
+      };
+
+      useLedgerStore.setState({ settings: updatedSettings });
+
+      // Then save to YAML
       await saveSettings();
       toast.success('設定を保存しました');
     } catch (error) {
@@ -104,7 +112,7 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>テーマ</Label>
                 <Select
-                  value={theme}
+                  value={theme || 'system'}
                   onValueChange={(v) => setTheme(v)}
                 >
                   <SelectTrigger>
