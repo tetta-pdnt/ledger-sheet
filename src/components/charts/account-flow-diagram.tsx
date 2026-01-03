@@ -263,7 +263,7 @@ export function AccountFlowDiagram({
 
     let startX: number, startY: number, endX: number, endY: number;
 
-    const gap = 10;
+    const gap = 20;
     // Calculate offset from center: distribute arrows symmetrically around center
     const offset = (offsetIndex - (totalCount - 1) / 2) * gap;
 
