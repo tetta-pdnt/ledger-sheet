@@ -60,7 +60,7 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="border-t p-4">
+      <div className="border-t p-4 space-y-3">
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -77,6 +77,18 @@ export function Sidebar() {
             起動中...
           </div>
         )}
+        
+        <div className="text-xs text-muted-foreground space-y-1">
+          <div className="font-medium">キーボードショートカット</div>
+          <div className="flex justify-between">
+            <span>← →</span>
+            <span>月の移動</span>
+          </div>
+          <div className="flex justify-between">
+            <span>↑ ↓</span>
+            <span>ページ移動</span>
+          </div>
+        </div>
       </div>
     </div>
   );
