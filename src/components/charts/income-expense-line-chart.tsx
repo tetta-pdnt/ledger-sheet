@@ -2,8 +2,8 @@
 
 import { useMemo } from 'react';
 import {
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,39 +12,35 @@ import {
   Legend,
 } from 'recharts';
 import { useLedgerStore } from '@/lib/store';
-import { getCategoryTotal, type Category } from '@/lib/schemas';
+import { getCategoryTotal } from '@/lib/schemas';
 import { formatCurrency } from '@/lib/utils';
 import { format, subMonths, parse } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
-interface StackedAreaChartProps {
-  type: 'income' | 'expense';
+interface IncomeExpenseLineChartProps {
   months?: number;
   periodType?: 'all' | 'year' | 'range';
   selectedYear?: number;
   startMonth?: string; // YYYY-MM format
   endMonth?: string; // YYYY-MM format
-  selectedCategories?: string[]; // category IDs to display
 }
 
-export function StackedAreaChart({
-  type,
+export function IncomeExpenseLineChart({
   months = 6,
   periodType,
   selectedYear,
   startMonth,
   endMonth,
-  selectedCategories,
-}: StackedAreaChartProps) {
-  const { categories, getMonthlyData, currentMonth, monthlyData } = useLedgerStore();
-
-  const categoryList: Category[] =
-    type === 'income'
-      ? categories.categories.income
-      : categories.categories.expense;
+}: IncomeExpenseLineChartProps) {
+  const { getMonthlyData, currentMonth, monthlyData } = useLedgerStore();
 
   const chartData = useMemo(() => {
-    const data: Record<string, string | number>[] = [];
+    const data: Array<{
+      month: string;
+      monthKey: string;
+      income: number;
+      expense: number;
+    }> = [];
 
     if (periodType === 'range' && startMonth && endMonth) {
       // Show months in specified range
@@ -57,19 +53,23 @@ export function StackedAreaChart({
         const monthLabel = format(monthDate, 'yyyy/M', { locale: ja });
 
         const monthData = getMonthlyData(monthKey);
-        const amounts = type === 'income' ? monthData.income : monthData.expense;
 
-        const dataPoint: Record<string, string | number> = {
+        // Calculate total income
+        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        // Calculate total expense
+        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        data.push({
           month: monthLabel,
           monthKey,
-        };
-
-        categoryList.forEach((cat) => {
-          const amount = amounts[cat.id];
-          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+          income: totalIncome,
+          expense: totalExpense,
         });
-
-        data.push(dataPoint);
       }
     } else if (periodType === 'all') {
       // Show all available months
@@ -79,19 +79,23 @@ export function StackedAreaChart({
         const monthLabel = format(monthDate, 'yyyy/M', { locale: ja });
 
         const monthData = getMonthlyData(monthKey);
-        const amounts = type === 'income' ? monthData.income : monthData.expense;
 
-        const dataPoint: Record<string, string | number> = {
+        // Calculate total income
+        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        // Calculate total expense
+        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        data.push({
           month: monthLabel,
           monthKey,
-        };
-
-        categoryList.forEach((cat) => {
-          const amount = amounts[cat.id];
-          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+          income: totalIncome,
+          expense: totalExpense,
         });
-
-        data.push(dataPoint);
       }
     } else if (periodType === 'year' && selectedYear) {
       // Show only selected year's months
@@ -103,19 +107,23 @@ export function StackedAreaChart({
         const monthLabel = format(monthDate, 'M月', { locale: ja });
 
         const monthData = getMonthlyData(monthKey);
-        const amounts = type === 'income' ? monthData.income : monthData.expense;
 
-        const dataPoint: Record<string, string | number> = {
+        // Calculate total income
+        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        // Calculate total expense
+        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        data.push({
           month: monthLabel,
           monthKey,
-        };
-
-        categoryList.forEach((cat) => {
-          const amount = amounts[cat.id];
-          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+          income: totalIncome,
+          expense: totalExpense,
         });
-
-        data.push(dataPoint);
       }
     } else {
       // Legacy: show last N months from currentMonth
@@ -127,39 +135,28 @@ export function StackedAreaChart({
         const monthLabel = format(targetDate, 'M月', { locale: ja });
 
         const monthData = getMonthlyData(monthKey);
-        const amounts = type === 'income' ? monthData.income : monthData.expense;
 
-        const dataPoint: Record<string, string | number> = {
+        // Calculate total income
+        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        // Calculate total expense
+        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
+          return sum + getCategoryTotal(amount);
+        }, 0);
+
+        data.push({
           month: monthLabel,
           monthKey,
-        };
-
-        categoryList.forEach((cat) => {
-          const amount = amounts[cat.id];
-          dataPoint[cat.id] = amount ? getCategoryTotal(amount) : 0;
+          income: totalIncome,
+          expense: totalExpense,
         });
-
-        data.push(dataPoint);
       }
     }
 
     return data;
-  }, [currentMonth, months, type, categoryList, getMonthlyData, monthlyData, periodType, selectedYear, startMonth, endMonth]);
-
-  // Filter categories that have at least some data
-  const activeCategories = useMemo(() => {
-    let filteredList = categoryList;
-
-    // Filter by selected categories if specified
-    if (selectedCategories && selectedCategories.length > 0) {
-      filteredList = categoryList.filter(cat => selectedCategories.includes(cat.id));
-    }
-
-    // Filter categories that have at least some data
-    return filteredList.filter((cat) =>
-      chartData.some((d) => (d[cat.id] as number) > 0)
-    );
-  }, [categoryList, chartData, selectedCategories]);
+  }, [currentMonth, months, getMonthlyData, monthlyData, periodType, selectedYear, startMonth, endMonth]);
 
   const CustomTooltip = ({ active, payload, label }: {
     active?: boolean;
@@ -168,34 +165,50 @@ export function StackedAreaChart({
   }) => {
     if (!active || !payload || payload.length === 0) return null;
 
-    const total = payload.reduce((sum, entry) => sum + entry.value, 0);
+    const incomeEntry = payload.find(p => p.name === 'income');
+    const expenseEntry = payload.find(p => p.name === 'expense');
+    const balance = (incomeEntry?.value || 0) - (expenseEntry?.value || 0);
 
     return (
       <div className="bg-popover border rounded-lg shadow-lg p-3 text-sm">
         <p className="font-medium mb-2">{label}</p>
         <div className="space-y-1">
-          {payload.map((entry) => (
-            <div key={entry.name} className="flex items-center justify-between gap-4">
+          {incomeEntry && (
+            <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: entry.color }}
+                  style={{ backgroundColor: incomeEntry.color }}
                 />
-                <span>{categoryList.find((c) => c.id === entry.name)?.name || entry.name}</span>
+                <span>収入</span>
               </div>
-              <span className="font-medium">{formatCurrency(entry.value)}</span>
+              <span className="font-medium text-green-600">{formatCurrency(incomeEntry.value)}</span>
             </div>
-          ))}
+          )}
+          {expenseEntry && (
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: expenseEntry.color }}
+                />
+                <span>支出</span>
+              </div>
+              <span className="font-medium text-red-600">{formatCurrency(expenseEntry.value)}</span>
+            </div>
+          )}
         </div>
         <div className="border-t mt-2 pt-2 flex justify-between font-medium">
-          <span>合計</span>
-          <span>{formatCurrency(total)}</span>
+          <span>収支</span>
+          <span className={balance >= 0 ? 'text-blue-600' : 'text-red-600'}>
+            {balance >= 0 ? '+' : ''}{formatCurrency(balance)}
+          </span>
         </div>
       </div>
     );
   };
 
-  if (activeCategories.length === 0) {
+  if (chartData.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         データがありません
@@ -205,26 +218,11 @@ export function StackedAreaChart({
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <AreaChart
+      <LineChart
         data={chartData}
         margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-        syncId={`stacked-${type}`}
+        syncId="income-expense-line"
       >
-        <defs>
-          {activeCategories.map((cat) => (
-            <linearGradient
-              key={`gradient-${cat.id}`}
-              id={`gradient-${cat.id}`}
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
-              <stop offset="5%" stopColor={cat.color} stopOpacity={0.8} />
-              <stop offset="95%" stopColor={cat.color} stopOpacity={0.2} />
-            </linearGradient>
-          ))}
-        </defs>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
           dataKey="month"
@@ -241,23 +239,28 @@ export function StackedAreaChart({
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend
-          formatter={(value) =>
-            categoryList.find((c) => c.id === value)?.name || value
-          }
+          formatter={(value) => (value === 'income' ? '収入' : '支出')}
           wrapperStyle={{ fontSize: 12 }}
         />
-        {activeCategories.map((cat) => (
-          <Area
-            key={cat.id}
-            type="monotone"
-            dataKey={cat.id}
-            stackId="1"
-            stroke={cat.color}
-            fill={`url(#gradient-${cat.id})`}
-            fillOpacity={0.8}
-          />
-        ))}
-      </AreaChart>
+        <Line
+          type="monotone"
+          dataKey="income"
+          stroke="#10B981"
+          strokeWidth={2}
+          dot={{ fill: '#10B981', r: 4 }}
+          activeDot={{ r: 6 }}
+          name="income"
+        />
+        <Line
+          type="monotone"
+          dataKey="expense"
+          stroke="#EF4444"
+          strokeWidth={2}
+          dot={{ fill: '#EF4444', r: 4 }}
+          activeDot={{ r: 6 }}
+          name="expense"
+        />
+      </LineChart>
     </ResponsiveContainer>
   );
 }
