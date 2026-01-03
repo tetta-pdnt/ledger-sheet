@@ -394,7 +394,7 @@ export function AccountFlowDiagram({
                 width={pos.width}
                 height={pos.height}
                 rx={8}
-                fill={isSpecial ? color : 'white'}
+                fill={isSpecial ? color : 'var(--color-card)'}
                 stroke={color}
                 strokeWidth={2}
               />
@@ -414,7 +414,7 @@ export function AccountFlowDiagram({
                   y={pos.y + 36}
                   textAnchor="middle"
                   fontSize={11}
-                  fill={isSpecial ? 'white' : '#374151'}
+                  fill={isSpecial ? 'white' : 'var(--color-foreground)'}
                 >
                   {formatCurrency(value)}
                 </text>
@@ -439,7 +439,7 @@ export function AccountFlowDiagram({
                 width={80}
                 height={20}
                 rx={4}
-                fill="white"
+                fill="var(--color-card)"
                 stroke={flow.color}
                 strokeWidth={1}
               />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
 import { FolderOpen, Save, RotateCcw, RefreshCw } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { useLedgerStore } from '@/lib/store';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme();
   const {
     isLoaded,
     isLoading,
@@ -38,6 +40,16 @@ export default function SettingsPage() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
+      // First update the store with local settings and current theme from next-themes
+      const updatedSettings = {
+        ...localSettings,
+        theme: (theme || 'system') as 'light' | 'dark' | 'system',
+      };
+      
+      // Update the store's settings
+      useLedgerStore.setState({ settings: updatedSettings });
+      
+      // Then save to YAML
       await saveSettings();
       toast.success('設定を保存しました');
     } catch (error) {
@@ -102,10 +114,17 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>テーマ</Label>
                 <Select
-                  value={localSettings.theme}
-                  onValueChange={(v) =>
-                    setLocalSettings({ ...localSettings, theme: v as 'light' | 'dark' | 'system' })
-                  }
+                  value={theme || 'system'}
+                  onValueChange={(v) => {
+                    // Use View Transitions API if supported for smooth theme switching
+                    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+                      (document as any).startViewTransition(() => {
+                        setTheme(v);
+                      });
+                    } else {
+                      setTheme(v);
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />

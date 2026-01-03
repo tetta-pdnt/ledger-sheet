@@ -79,6 +79,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Semantic color tokens */
+  --color-income: var(--color-chart-2);
+  --color-expense: var(--color-destructive);
+  --color-positive: var(--color-primary);
+  --color-negative: var(--color-destructive);
+  --color-asset: var(--color-chart-4);
 }
 
 .dark {
@@ -113,6 +120,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --blue: oklch(65.84% 0.1703 259.56);
+
+  /* Semantic color tokens for dark */
+  --color-income: var(--color-chart-2);
+  --color-expense: var(--color-destructive);
+  --color-positive: var(--blue);
+  --color-negative: var(--color-destructive);
+  --color-asset: var(--color-chart-4);
 }
 
 @layer base {
@@ -122,4 +137,33 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Smooth theme transition */
+  html {
+    transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+  }
+  
+  html * {
+    transition: background-color 0.3s ease-in-out, 
+                border-color 0.3s ease-in-out, 
+                color 0.3s ease-in-out,
+                fill 0.3s ease-in-out,
+                stroke 0.3s ease-in-out;
+  }
+  
+  /* View Transitions API support for smoother theme switching */
+  @supports (view-transition-name: none) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation-duration: 0.4s;
+      animation-timing-function: ease-in-out;
+    }
+  }
+}
+
+@layer utilities {
+  /* Semantic color utilities */
+  .text-red-600 { color: var(--color-expense); }
+  .text-green-600 { color: var(--color-income); }
+  .text-blue-600 { color: var(--color-positive); }
 }
