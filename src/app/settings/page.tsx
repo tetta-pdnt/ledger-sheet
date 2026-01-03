@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
 import { FolderOpen, Save, RotateCcw, RefreshCw } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { useLedgerStore } from '@/lib/store';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme();
   const {
     isLoaded,
     isLoading,
@@ -102,10 +104,8 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>テーマ</Label>
                 <Select
-                  value={localSettings.theme}
-                  onValueChange={(v) =>
-                    setLocalSettings({ ...localSettings, theme: v as 'light' | 'dark' | 'system' })
-                  }
+                  value={theme}
+                  onValueChange={(v) => setTheme(v)}
                 >
                   <SelectTrigger>
                     <SelectValue />
