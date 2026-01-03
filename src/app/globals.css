@@ -120,11 +120,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --blue: oklch(65.84% 0.1703 259.56);
 
   /* Semantic color tokens for dark */
   --color-income: var(--color-chart-2);
   --color-expense: var(--color-destructive);
-  --color-positive: var(--color-chart-1);
+  --color-positive: var(--blue);
   --color-negative: var(--color-destructive);
   --color-asset: var(--color-chart-4);
 }
@@ -138,7 +139,9 @@
   }
 }
 
-/* Semantic color utilities */
-.text-red-600 { color: var(--color-expense); }
-.text-green-600 { color: var(--color-income); }
-.text-blue-600 { color: var(--color-positive); }
+@layer utilities {
+  /* Semantic color utilities */
+  .text-red-600 { color: var(--color-expense); }
+  .text-green-600 { color: var(--color-income); }
+  .text-blue-600 { color: var(--color-positive); }
+}
