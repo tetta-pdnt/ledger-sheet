@@ -22,6 +22,8 @@ interface NodePosition {
   height: number;
 }
 
+type Direction = 'right' | 'left' | 'top' | 'bottom';
+
 export function AccountFlowDiagram({
   accounts,
   transfers,
@@ -104,6 +106,7 @@ export function AccountFlowDiagram({
       label?: string;
       color: string;
       offsetIndex: number;
+      totalCount: number;
     }> = [];
 
     const flowCount: Record<string, number> = {};
@@ -126,6 +129,7 @@ export function AccountFlowDiagram({
           amount,
           color: '#22c55e',
           offsetIndex: index,
+          totalCount: 0, // Will be set later
         });
       }
     }
@@ -144,6 +148,7 @@ export function AccountFlowDiagram({
           label: transfer.note,
           color: '#3b82f6',
           offsetIndex: index,
+          totalCount: 0, // Will be set later
         });
       }
     }
@@ -161,6 +166,7 @@ export function AccountFlowDiagram({
           amount,
           color: '#ef4444',
           offsetIndex: index,
+          totalCount: 0, // Will be set later
         });
       }
     }
@@ -178,6 +184,7 @@ export function AccountFlowDiagram({
         label: '自動精算',
         color: monthlyBalance > 0 ? '#8B5CF6' : '#EC4899',
         offsetIndex: index,
+        totalCount: 0, // Will be set later
       });
     }
 
@@ -197,7 +204,14 @@ export function AccountFlowDiagram({
         label: 'pool年次リセット',
         color: '#F59E0B', // amber color
         offsetIndex: index,
+        totalCount: 0, // Will be set later
       });
+    }
+
+    // Set totalCount for each flow
+    for (const flow of result) {
+      const key = getFlowKey(flow.from, flow.to);
+      flow.totalCount = flowCount[key] || 1;
     }
 
     return result;
@@ -221,52 +235,65 @@ export function AccountFlowDiagram({
     return accountBalances[id] || 0;
   };
 
-  // Calculate arrow path between two nodes
-  const getArrowPath = (from: NodePosition, to: NodePosition, offsetIndex = 0) => {
-    const fromCenterX = from.x + from.width / 2;
-    const fromCenterY = from.y + from.height / 2;
-    const toCenterX = to.x + to.width / 2;
-    const toCenterY = to.y + to.height / 2;
+  const getCenter = (pos: NodePosition) => {
+    return {
+      x: pos.x + pos.width / 2,
+      y: pos.y + pos.height / 2,
+    };
+  }
+
+  const getDirection = (from: NodePosition, to: NodePosition): Direction => {
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
     const dx = toCenterX - fromCenterX;
     const dy = toCenterY - fromCenterY;
-    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
+    const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
 
-    // Determine direction
-    const isBelow = deg >= 45 && deg < 135;
-    const isRight = deg >= -45 && deg < 45;
-    const isLeft = deg >= 135 || deg < -135;
+    if (angle >= 45  && angle < 135) return 'bottom';
+    if (angle >= 135 && angle < 225) return 'left';
+    if (angle >= 225 && angle < 315) return 'top';
+    return 'right';
+  }
+
+  // Calculate arrow path between two nodes
+  const getArrowPath = (from: NodePosition, to: NodePosition, offsetIndex = 0, totalCount = 1) => {
+    const direction = getDirection(from, to);
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
 
     let startX: number, startY: number, endX: number, endY: number;
 
     const gap = 10;
+    // Calculate offset from center: distribute arrows symmetrically around center
+    const offset = (offsetIndex - (totalCount - 1) / 2) * gap;
 
-    if (isBelow) {
-      startX = fromCenterX + offsetIndex * gap;
+    if (direction === 'bottom') {
+      startX = fromCenterX + offset;
       startY = from.y + from.height;
-      endX = toCenterX + offsetIndex * gap;
+      endX = toCenterX + offset;
       endY = to.y - 14;
-    } else if (isRight) {
+    } else if (direction === 'right') {
       startX = from.x + from.width;
-      startY = fromCenterY + offsetIndex * gap;
+      startY = fromCenterY + offset;
       endX = to.x - 14;
-      endY = toCenterY + offsetIndex * gap;
-    } else if (isLeft) {
+      endY = toCenterY + offset;
+    } else if (direction === 'left') {
       startX = from.x;
-      startY = fromCenterY + offsetIndex * gap;
+      startY = fromCenterY + offset;
       endX = to.x + to.width + 14;
-      endY = toCenterY + offsetIndex * gap;
+      endY = toCenterY + offset;
     } else {
-      startX = fromCenterX + offsetIndex * gap;
+      startX = fromCenterX + offset;
       startY = from.y;
-      endX = toCenterX + offsetIndex * gap;
+      endX = toCenterX + offset;
       endY = to.y + to.height + 14;
     }
 
     // Curved path
-    if (isBelow) {
+    if (direction === 'bottom') {
       const midY = (startY + endY) / 2;
       return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-    } else if (isRight || isLeft) {
+    } else if (direction === 'right' || direction === 'left') {
       const midX = (startX + endX) / 2;
       return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
     } else {
@@ -276,42 +303,35 @@ export function AccountFlowDiagram({
   };
 
   // Get arrow position for label
-  const getArrowMidpoint = (from: NodePosition, to: NodePosition, offsetIndex = 0) => {
-    const fromCenterX = from.x + from.width / 2;
-    const fromCenterY = from.y + from.height / 2;
-    const toCenterX = to.x + to.width / 2;
-    const toCenterY = to.y + to.height / 2;
-    const dx = toCenterX - fromCenterX;
-    const dy = toCenterY - fromCenterY;
-    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
-
-    const isBelow = deg >= 45 && deg < 135;
-    const isRight = deg >= -45 && deg < 45;
-    const isLeft  = deg >= 135 || deg < -135;
+  const getArrowMidpoint = (from: NodePosition, to: NodePosition, offsetIndex = 0, totalCount = 1) => {
+    const direction = getDirection(from, to);
+    const { x: fromCenterX, y: fromCenterY } = getCenter(from);
+    const { x: toCenterX, y: toCenterY } = getCenter(to);
 
     let startX: number, startY: number, endX: number, endY: number;
 
     const gap = 24;
+    const offset = (offsetIndex - (totalCount - 1) / 2) * gap;
 
-    if (isBelow) {
-      startX = fromCenterX + offsetIndex * gap;
+    if (direction === 'bottom') {
+      startX = fromCenterX + offset;
       startY = from.y + from.height;
-      endX = toCenterX + offsetIndex * gap;
+      endX = toCenterX + offset;
       endY = to.y - 14;
-    } else if (isRight) {
+    } else if (direction === 'right') {
       startX = from.x + from.width;
-      startY = fromCenterY + offsetIndex * gap;
+      startY = fromCenterY + offset;
       endX = to.x - 14;
-      endY = toCenterY + offsetIndex * gap;
-    } else if (isLeft) {
+      endY = toCenterY + offset;
+    } else if (direction === 'left') {
       startX = from.x;
-      startY = fromCenterY + offsetIndex * gap;
+      startY = fromCenterY + offset;
       endX = to.x + to.width + 14;
-      endY = toCenterY + offsetIndex * gap;
+      endY = toCenterY + offset;
     } else {
-      startX = fromCenterX + offsetIndex * gap;
+      startX = fromCenterX + offset;
       startY = from.y;
-      endX = toCenterX + offsetIndex * gap;
+      endX = toCenterX + offset;
       endY = to.y + to.height + 14;
     }
 
@@ -340,7 +360,7 @@ export function AccountFlowDiagram({
           ))}
         </defs>
 
-        {/* Draw flows/arrows */}
+        {/* Draw flow arrows first */}
         {flows.map((flow, i) => {
           const fromPos = nodePositions[flow.from];
           const toPos = nodePositions[flow.to];
@@ -348,8 +368,8 @@ export function AccountFlowDiagram({
 
           return (
             <path
-              key={`${flow.from}-${flow.to}-${flow.offsetIndex}`}
-              d={getArrowPath(fromPos, toPos, flow.offsetIndex)}
+              key={`flow-path-${i}`}
+              d={getArrowPath(fromPos, toPos, flow.offsetIndex, flow.totalCount)}
               fill="none"
               stroke={flow.color}
               strokeWidth={2}
@@ -403,13 +423,13 @@ export function AccountFlowDiagram({
           );
         })}
 
-        {/* Amount label on arrow */}
+        {/* Draw flow labels on top of everything */}
         {flows.map((flow, i) => {
           const fromPos = nodePositions[flow.from];
           const toPos = nodePositions[flow.to];
           if (!fromPos || !toPos) return null;
 
-          const midpoint = getArrowMidpoint(fromPos, toPos, flow.offsetIndex);
+          const midpoint = getArrowMidpoint(fromPos, toPos, flow.offsetIndex, flow.totalCount);
 
           return (
             <g key={`flow-label-${i}`}>
