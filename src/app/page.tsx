@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { MonthPicker } from '@/components/ui/month-picker';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
+import { IncomeExpenseLineChart } from '@/components/charts/income-expense-line-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 
@@ -130,6 +131,37 @@ export default function DashboardPage() {
   const chartDescription = periodType === 'all'
     ? '全期間のカテゴリ別'
     : `${selectedYear}年のカテゴリ別`;
+
+
+  const displayAccounts = accounts.accounts
+    .filter(({id}) => id !== 'account')
+    .map(account => ({
+      ...account,
+      balance: calculatedBalances[account.id] || 0,
+    }));
+  const { saveBalance, poolBalance, poolIndex } = displayAccounts.reduce(
+    (acc, account, index) => {
+      if (account.id === 'save') acc.saveBalance = account.balance;
+      if (account.id === 'pool') {
+        acc.poolBalance = account.balance;
+        acc.poolIndex = index;
+      }
+      return acc;
+    },
+    { saveBalance: 0, poolBalance: 0, poolIndex: -1 }
+  );
+  const accountsWithVirtual = poolIndex >= 0
+    ? [
+        ...displayAccounts.slice(0, poolIndex + 1),
+        {
+          id: 'save-pool',
+          name: 'save - pool',
+          color: '#6B7280',
+          balance: saveBalance + poolBalance,
+        },
+        ...displayAccounts.slice(poolIndex + 1),
+      ]
+    : displayAccounts;
 
   return (
     <div className="flex flex-col h-full">
@@ -265,6 +297,39 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>口座残高</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {accounts.accounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                口座がありません。データフォルダを開いてください。
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {accountsWithVirtual.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: account.color }}
+                        />
+                        <p className="text-sm font-medium">{account.name}</p>
+                      </div>
+                      <div className={`text-sm font-medium ${account.balance < 0 ? 'text-red-600' : ''}`}>
+                        {formatCurrency(account.balance)}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
@@ -370,6 +435,24 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Income vs Expense Line Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-blue-600">収入・支出推移</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              収入と支出の推移を比較
+            </p>
+          </CardHeader>
+          <CardContent>
+            <IncomeExpenseLineChart
+              periodType={periodType}
+              selectedYear={selectedYear}
+              startMonth={startMonth}
+              endMonth={endMonth}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -432,42 +515,6 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>口座残高</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {accounts.accounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  口座がありません。データフォルダを開いてください。
-                </p>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {accounts.accounts.map((account) => {
-                    const accountBalance = calculatedBalances[account.id] || 0;
-                    return (
-                      <div
-                        key={account.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-3 w-3 rounded-full"
-                            style={{ backgroundColor: account.color }}
-                          />
-                          <p className="text-sm font-medium">{account.name}</p>
-                        </div>
-                        <div className={`text-sm font-medium ${accountBalance < 0 ? 'text-red-600' : ''}`}>
-                          {formatCurrency(accountBalance)}
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </CardContent>
