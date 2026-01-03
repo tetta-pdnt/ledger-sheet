@@ -137,6 +137,28 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Smooth theme transition */
+  html {
+    transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+  }
+  
+  html * {
+    transition: background-color 0.3s ease-in-out, 
+                border-color 0.3s ease-in-out, 
+                color 0.3s ease-in-out,
+                fill 0.3s ease-in-out,
+                stroke 0.3s ease-in-out;
+  }
+  
+  /* View Transitions API support for smoother theme switching */
+  @supports (view-transition-name: none) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation-duration: 0.4s;
+      animation-timing-function: ease-in-out;
+    }
+  }
 }
 
 @layer utilities {

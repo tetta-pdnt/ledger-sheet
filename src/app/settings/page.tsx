@@ -40,13 +40,15 @@ export default function SettingsPage() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
+      // First update the store with local settings and current theme from next-themes
       const updatedSettings = {
         ...localSettings,
         theme: (theme || 'system') as 'light' | 'dark' | 'system',
       };
-
+      
+      // Update the store's settings
       useLedgerStore.setState({ settings: updatedSettings });
-
+      
       // Then save to YAML
       await saveSettings();
       toast.success('設定を保存しました');
@@ -113,7 +115,16 @@ export default function SettingsPage() {
                 <Label>テーマ</Label>
                 <Select
                   value={theme || 'system'}
-                  onValueChange={(v) => setTheme(v)}
+                  onValueChange={(v) => {
+                    // Use View Transitions API if supported for smooth theme switching
+                    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+                      (document as any).startViewTransition(() => {
+                        setTheme(v);
+                      });
+                    } else {
+                      setTheme(v);
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
