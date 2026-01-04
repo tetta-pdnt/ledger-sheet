@@ -54,15 +54,19 @@ export function IncomeExpenseLineChart({
 
         const monthData = getMonthlyData(monthKey);
 
-        // Calculate total income
-        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total income (excluding bonus, misc, pool)
+        const totalIncome = Object.entries(monthData.income)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
-        // Calculate total expense
-        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total expense (excluding bonus, misc, pool)
+        const totalExpense = Object.entries(monthData.expense)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
         data.push({
           month: monthLabel,
@@ -80,15 +84,19 @@ export function IncomeExpenseLineChart({
 
         const monthData = getMonthlyData(monthKey);
 
-        // Calculate total income
-        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total income (excluding bonus, misc, pool)
+        const totalIncome = Object.entries(monthData.income)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
-        // Calculate total expense
-        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total expense (excluding bonus, misc, pool)
+        const totalExpense = Object.entries(monthData.expense)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
         data.push({
           month: monthLabel,
@@ -108,15 +116,19 @@ export function IncomeExpenseLineChart({
 
         const monthData = getMonthlyData(monthKey);
 
-        // Calculate total income
-        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total income (excluding bonus, misc, pool)
+        const totalIncome = Object.entries(monthData.income)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
-        // Calculate total expense
-        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total expense (excluding bonus, misc, pool)
+        const totalExpense = Object.entries(monthData.expense)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
         data.push({
           month: monthLabel,
@@ -136,15 +148,19 @@ export function IncomeExpenseLineChart({
 
         const monthData = getMonthlyData(monthKey);
 
-        // Calculate total income
-        const totalIncome = Object.values(monthData.income).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total income (excluding bonus, misc, pool)
+        const totalIncome = Object.entries(monthData.income)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
-        // Calculate total expense
-        const totalExpense = Object.values(monthData.expense).reduce((sum: number, amount) => {
-          return sum + getCategoryTotal(amount);
-        }, 0);
+        // Calculate total expense (excluding bonus, misc, pool)
+        const totalExpense = Object.entries(monthData.expense)
+          .filter(([categoryId]) => !['bonus', 'misc', 'pool'].includes(categoryId))
+          .reduce((sum: number, [, amount]) => {
+            return sum + getCategoryTotal(amount);
+          }, 0);
 
         data.push({
           month: monthLabel,

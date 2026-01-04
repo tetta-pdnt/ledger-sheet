@@ -8,7 +8,6 @@ import {
   Tags,
   Wallet,
   PiggyBank,
-  GitGraph,
   Settings,
   RefreshCw,
   Loader2,
@@ -23,7 +22,6 @@ const navigation = [
   { name: '定期項目', href: '/recurrings', icon: RefreshCw },
   { name: '口座', href: '/accounts', icon: Wallet },
   { name: 'カテゴリ', href: '/categories', icon: Tags },
-  { name: 'サンキー図', href: '/sankey', icon: GitGraph },
   { name: '設定', href: '/settings', icon: Settings },
 ];
 
