@@ -12,7 +12,6 @@ const navigationRoutes = [
   '/recurrings',
   '/accounts',
   '/categories',
-  '/sankey',
   '/settings',
 ];
 

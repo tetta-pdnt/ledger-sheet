@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronRight, ArrowRight, ArrowRightLeft, CheckCircle2, Waves } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,8 @@ import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 import { getCategoryTotal, getActiveCategories, isActiveForMonth } from '@/lib/schemas';
 import { AccountFlowDiagram } from '@/components/charts/account-flow-diagram';
+import { SankeyDiagram } from '@/components/charts/sankey-diagram';
+import { transformToSankeyData } from '@/lib/sankey';
 import type { Category, CategoryAmount, Transfer } from '@/lib/schemas';
 
 interface CategoryInputProps {
@@ -340,6 +342,35 @@ export default function TransactionsPage() {
 
   const poolYearlyReset = getPoolYearlyReset(currentMonth);
 
+  // Sankey diagram dimensions
+  const sankeyContainerRef = useRef<HTMLDivElement>(null);
+  const [sankeyDimensions, setSankeyDimensions] = useState({ width: 800, height: 500 });
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (sankeyContainerRef.current) {
+        const { width } = sankeyContainerRef.current.getBoundingClientRect();
+        setSankeyDimensions({
+          width: Math.max(400, width - 48),
+          height: Math.max(400, Math.min(600, window.innerHeight - 300)),
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
+  const sankeyData = useMemo(() => {
+    return transformToSankeyData(
+      monthlyData,
+      accounts,
+      categories.categories.income,
+      categories.categories.expense
+    );
+  }, [monthlyData, accounts, categories.categories]);
+
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<Partial<Transfer>>({
     from: '',
@@ -625,6 +656,41 @@ export default function TransactionsPage() {
               incomeByAccount={incomeByAccount}
               poolYearlyReset={poolYearlyReset}
             />
+          </CardContent>
+        </Card>
+
+        {/* Sankey Diagram */}
+        <Card>
+          <CardHeader>
+            <CardTitle>収支フロー</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              収入から口座を経由して支出カテゴリへのお金の流れを可視化
+            </p>
+          </CardHeader>
+          <CardContent ref={sankeyContainerRef}>
+            <div className="flex justify-center">
+              <SankeyDiagram
+                nodes={sankeyData.nodes}
+                links={sankeyData.links}
+                width={sankeyDimensions.width}
+                height={sankeyDimensions.height}
+              />
+            </div>
+
+            <div className="mt-6 flex justify-center gap-8 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded bg-green-500" />
+                <span>収入</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded bg-blue-500" />
+                <span>口座</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded bg-red-500" />
+                <span>支出</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
