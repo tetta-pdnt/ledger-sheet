@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   AreaChart,
   Area,
@@ -42,6 +42,59 @@ export function StackedAreaChart({
     type === 'income'
       ? categories.categories.income
       : categories.categories.expense;
+
+  // Manage visible categories internally
+  const [visibleCategories, setVisibleCategories] = useState<Set<string>>(new Set());
+  const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
+
+  // Initialize visible categories when selectedCategories changes
+  useEffect(() => {
+    if (selectedCategories && selectedCategories.length > 0) {
+      setVisibleCategories(new Set(selectedCategories));
+    } else {
+      setVisibleCategories(new Set(categoryList.map(c => c.id)));
+    }
+  }, [selectedCategories, categoryList]);
+
+  // Handle legend click (single/double click)
+  const handleLegendClick = (categoryId: string) => {
+    clickCountRef.current += 1;
+
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+    }
+
+    clickTimerRef.current = setTimeout(() => {
+      if (clickCountRef.current === 1) {
+        // Single click: toggle this category
+        setVisibleCategories(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(categoryId)) {
+            newSet.delete(categoryId);
+          } else {
+            newSet.add(categoryId);
+          }
+          return newSet;
+        });
+      } else if (clickCountRef.current === 2) {
+        // Double click: toggle all other categories
+        setVisibleCategories(prev => {
+          const allCategories = categoryList.map(c => c.id);
+          const allVisible = allCategories.every(id => prev.has(id));
+
+          if (allVisible || prev.size === 0) {
+            // If all are visible or none are visible, show only this category
+            return new Set([categoryId]);
+          } else {
+            // Otherwise, show all categories
+            return new Set(allCategories);
+          }
+        });
+      }
+      clickCountRef.current = 0;
+    }, 250);
+  };
 
   const chartData = useMemo(() => {
     const data: Record<string, string | number>[] = [];
@@ -148,18 +201,46 @@ export function StackedAreaChart({
 
   // Filter categories that have at least some data
   const activeCategories = useMemo(() => {
-    let filteredList = categoryList;
-
-    // Filter by selected categories if specified
-    if (selectedCategories && selectedCategories.length > 0) {
-      filteredList = categoryList.filter(cat => selectedCategories.includes(cat.id));
-    }
-
     // Filter categories that have at least some data
-    return filteredList.filter((cat) =>
+    return categoryList.filter((cat) =>
       chartData.some((d) => (d[cat.id] as number) > 0)
     );
-  }, [categoryList, chartData, selectedCategories]);
+  }, [categoryList, chartData]);
+
+  const CustomLegend = ({ payload }: { payload?: Array<{ value: string; color: string }> }) => {
+    if (!payload || payload.length === 0) return null;
+
+    // Sort payload by categoryList order
+    const sortedPayload = [...payload].sort((a, b) => {
+      const indexA = categoryList.findIndex(c => c.id === a.value);
+      const indexB = categoryList.findIndex(c => c.id === b.value);
+      return indexA - indexB;
+    });
+
+    return (
+      <div className="flex flex-wrap gap-4 justify-center mt-2 text-sm">
+        {sortedPayload.map((entry) => {
+          const category = categoryList.find(c => c.id === entry.value);
+          const isVisible = visibleCategories.has(entry.value);
+
+          return (
+            <div
+              key={entry.value}
+              className="flex items-center gap-2 cursor-pointer select-none"
+              onClick={() => handleLegendClick(entry.value)}
+              style={{ opacity: isVisible ? 1 : 0.3 }}
+            >
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span>{category?.name || entry.value}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const CustomTooltip = ({ active, payload, label }: {
     active?: boolean;
@@ -240,12 +321,7 @@ export function StackedAreaChart({
           width={50}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend
-          formatter={(value) =>
-            categoryList.find((c) => c.id === value)?.name || value
-          }
-          wrapperStyle={{ fontSize: 12 }}
-        />
+        <Legend content={<CustomLegend />} />
         {activeCategories.map((cat) => (
           <Area
             key={cat.id}
@@ -255,6 +331,7 @@ export function StackedAreaChart({
             stroke={cat.color}
             fill={`url(#gradient-${cat.id})`}
             fillOpacity={0.8}
+            hide={!visibleCategories.has(cat.id)}
           />
         ))}
       </AreaChart>

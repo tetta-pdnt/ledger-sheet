@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar, Filter } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -13,13 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { MonthPicker } from '@/components/ui/month-picker';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { IncomeExpenseLineChart } from '@/components/charts/income-expense-line-chart';
@@ -43,46 +35,8 @@ export default function DashboardPage() {
   const availableYears = getAvailableYears();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-
-  // Chart filters
-  const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
-  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
-  const userHasSelectedCategories = useRef(false);
-
-  // Initialize categories when they are loaded
-  useEffect(() => {
-    if (!userHasSelectedCategories.current) {
-      const incomeCount = categories.categories.income.length;
-      const expenseCount = categories.categories.expense.length;
-
-      // Update if category count has increased
-      if (incomeCount > 0 && incomeCount > incomeCategories.length) {
-        setIncomeCategories(categories.categories.income.map(c => c.id));
-      }
-      if (expenseCount > 0 && expenseCount > expenseCategories.length) {
-        setExpenseCategories(categories.categories.expense.map(c => c.id));
-      }
-    }
-  }, [categories.categories.income, categories.categories.expense, incomeCategories.length, expenseCategories.length]);
-
-  const toggleCategory = (type: 'income' | 'expense', categoryId: string) => {
-    userHasSelectedCategories.current = true;
-    if (type === 'income') {
-      setIncomeCategories(prev =>
-        prev.includes(categoryId)
-          ? prev.filter(id => id !== categoryId)
-          : [...prev, categoryId]
-      );
-    } else {
-      setExpenseCategories(prev =>
-        prev.includes(categoryId)
-          ? prev.filter(id => id !== categoryId)
-          : [...prev, categoryId]
-      );
-    }
-  };
 
   // Get period totals based on selection
   const periodTotals = getPeriodTotals(
@@ -348,47 +302,11 @@ export default function DashboardPage() {
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-green-600">収入推移</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {chartDescription}収入
-                </p>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>表示カテゴリ選択</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {categories.categories.income.map(cat => (
-                      <div key={cat.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`income-${cat.id}`}
-                          checked={incomeCategories.includes(cat.id)}
-                          onCheckedChange={() => toggleCategory('income', cat.id)}
-                        />
-                        <label htmlFor={`income-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                          <span className="text-sm">{cat.name}</span>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    onClick={() => setIncomeCategories(categories.categories.income.map(c => c.id))}
-                    variant="outline"
-                    size="sm"
-                  >
-                    全て選択
-                  </Button>
-                </DialogContent>
-              </Dialog>
+            <CardHeader>
+              <CardTitle className="text-green-600">収入推移</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {chartDescription}収入
+              </p>
             </CardHeader>
             <CardContent>
               <StackedAreaChart
@@ -397,53 +315,16 @@ export default function DashboardPage() {
                 selectedYear={selectedYear}
                 startMonth={startMonth}
                 endMonth={endMonth}
-                selectedCategories={incomeCategories.length > 0 ? incomeCategories : undefined}
               />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-red-600">支出推移</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {chartDescription}支出
-                </p>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>表示カテゴリ選択</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {categories.categories.expense.map(cat => (
-                      <div key={cat.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`expense-${cat.id}`}
-                          checked={expenseCategories.includes(cat.id)}
-                          onCheckedChange={() => toggleCategory('expense', cat.id)}
-                        />
-                        <label htmlFor={`expense-${cat.id}`} className="flex items-center gap-2 cursor-pointer">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                          <span className="text-sm">{cat.name}</span>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    onClick={() => setExpenseCategories(categories.categories.expense.map(c => c.id))}
-                    variant="outline"
-                    size="sm"
-                  >
-                    全て選択
-                  </Button>
-                </DialogContent>
-              </Dialog>
+            <CardHeader>
+              <CardTitle className="text-red-600">支出推移</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {chartDescription}支出
+              </p>
             </CardHeader>
             <CardContent>
               <StackedAreaChart
@@ -452,7 +333,6 @@ export default function DashboardPage() {
                 selectedYear={selectedYear}
                 startMonth={startMonth}
                 endMonth={endMonth}
-                selectedCategories={expenseCategories.length > 0 ? expenseCategories : undefined}
               />
             </CardContent>
           </Card>
