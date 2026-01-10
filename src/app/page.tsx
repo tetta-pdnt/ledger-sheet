@@ -15,7 +15,7 @@ import {
 import { MonthPicker } from '@/components/ui/month-picker';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { IncomeExpenseLineChart } from '@/components/charts/income-expense-line-chart';
-import { SemicircleComparisonChart } from '@/components/charts/semicircle-comparison-chart';
+import { HorizontalBalanceChart } from '@/components/charts/horizontal-balance-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 
@@ -266,38 +266,55 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>口座残高</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {accounts.accounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                口座がありません。データフォルダを開いてください。
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {accountsWithVirtual.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: account.color }}
-                        />
-                        <p className="text-sm font-medium">{account.name}</p>
+        {/* Account Balance and Semicircle Comparison */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>口座残高</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {accounts.accounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  口座がありません。データフォルダを開いてください。
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {accountsWithVirtual.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: account.color }}
+                          />
+                          <p className="text-sm font-medium">{account.name}</p>
+                        </div>
+                        <div className={`text-sm font-medium ${account.balance < 0 ? 'text-red-600' : ''}`}>
+                          {formatCurrency(account.balance)}
+                        </div>
                       </div>
-                      <div className={`text-sm font-medium ${account.balance < 0 ? 'text-red-600' : ''}`}>
-                        {formatCurrency(account.balance)}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-purple-600">収支バランス比較</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HorizontalBalanceChart
+                periodType={periodType}
+                selectedYear={selectedYear}
+                startMonth={startMonth}
+                endMonth={endMonth}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Stacked Area Charts */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -348,24 +365,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <IncomeExpenseLineChart
-              periodType={periodType}
-              selectedYear={selectedYear}
-              startMonth={startMonth}
-              endMonth={endMonth}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Semicircle Comparison Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-purple-600">収支バランス比較</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              内側：収入サブカテゴリ / 外側：支出カテゴリ（{periodLabel}）
-            </p>
-          </CardHeader>
-          <CardContent>
-            <SemicircleComparisonChart
               periodType={periodType}
               selectedYear={selectedYear}
               startMonth={startMonth}
