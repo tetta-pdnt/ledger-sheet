@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Calendar, Filter } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ import {
 import { MonthPicker } from '@/components/ui/month-picker';
 import { StackedAreaChart } from '@/components/charts/stacked-area-chart';
 import { IncomeExpenseLineChart } from '@/components/charts/income-expense-line-chart';
+import { SemicircleComparisonChart } from '@/components/charts/semicircle-comparison-chart';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 
@@ -44,16 +45,30 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
   // Chart filters
-  const [incomeCategories, setIncomeCategories] = useState<string[]>(
-    categories.categories.income.map(c => c.id)
-  );
-  const [expenseCategories, setExpenseCategories] = useState<string[]>(
-    categories.categories.expense.map(c => c.id)
-  );
+  const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
+  const userHasSelectedCategories = useRef(false);
+
+  // Initialize categories when they are loaded
+  useEffect(() => {
+    if (!userHasSelectedCategories.current) {
+      const incomeCount = categories.categories.income.length;
+      const expenseCount = categories.categories.expense.length;
+
+      // Update if category count has increased
+      if (incomeCount > 0 && incomeCount > incomeCategories.length) {
+        setIncomeCategories(categories.categories.income.map(c => c.id));
+      }
+      if (expenseCount > 0 && expenseCount > expenseCategories.length) {
+        setExpenseCategories(categories.categories.expense.map(c => c.id));
+      }
+    }
+  }, [categories.categories.income, categories.categories.expense, incomeCategories.length, expenseCategories.length]);
 
   const toggleCategory = (type: 'income' | 'expense', categoryId: string) => {
+    userHasSelectedCategories.current = true;
     if (type === 'income') {
       setIncomeCategories(prev =>
         prev.includes(categoryId)
@@ -365,7 +380,11 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
-                  <Button onClick={() => setIncomeCategories([])} variant="outline" size="sm">
+                  <Button
+                    onClick={() => setIncomeCategories(categories.categories.income.map(c => c.id))}
+                    variant="outline"
+                    size="sm"
+                  >
                     全て選択
                   </Button>
                 </DialogContent>
@@ -416,7 +435,11 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
-                  <Button onClick={() => setExpenseCategories([])} variant="outline" size="sm">
+                  <Button
+                    onClick={() => setExpenseCategories(categories.categories.expense.map(c => c.id))}
+                    variant="outline"
+                    size="sm"
+                  >
                     全て選択
                   </Button>
                 </DialogContent>
@@ -445,6 +468,24 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <IncomeExpenseLineChart
+              periodType={periodType}
+              selectedYear={selectedYear}
+              startMonth={startMonth}
+              endMonth={endMonth}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Semicircle Comparison Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-purple-600">収支バランス比較</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              内側：収入サブカテゴリ / 外側：支出カテゴリ（{periodLabel}）
+            </p>
+          </CardHeader>
+          <CardContent>
+            <SemicircleComparisonChart
               periodType={periodType}
               selectedYear={selectedYear}
               startMonth={startMonth}
