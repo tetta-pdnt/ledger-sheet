@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useLedgerStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/utils';
 
@@ -18,6 +20,14 @@ interface SegmentData {
   value: number;
   color: string;
   percentage: number;
+  categoryId?: string;
+  subcategories?: SubcategoryData[];
+}
+
+interface SubcategoryData {
+  name: string;
+  value: number;
+  percentage: number;
 }
 
 export function HorizontalBalanceChart({
@@ -28,6 +38,32 @@ export function HorizontalBalanceChart({
 }: HorizontalBalanceChartProps) {
   const { categories, monthlyData, getPeriodTotals } = useLedgerStore();
   const [hoveredSegment, setHoveredSegment] = useState<{ type: 'income' | 'expense'; index: number } | null>(null);
+  const [hoveredCategory, setHoveredCategory] = useState<{
+    categoryId: string;
+    name: string;
+    color: string;
+    subcategories: SubcategoryData[];
+    position: { x: number; y: number };
+  } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipPlacement, setTooltipPlacement] = useState<'top' | 'bottom'>('top');
+
+  // Adjust tooltip position to prevent overflow
+  useEffect(() => {
+    if (hoveredCategory && tooltipRef.current) {
+      const tooltipHeight = tooltipRef.current.offsetHeight;
+      const viewportHeight = window.innerHeight;
+      const spaceAbove = hoveredCategory.position.y;
+      const spaceBelow = viewportHeight - hoveredCategory.position.y;
+
+      // If tooltip doesn't fit above and there's more space below, show below
+      if (spaceAbove < tooltipHeight + 20 && spaceBelow > spaceAbove) {
+        setTooltipPlacement('bottom');
+      } else {
+        setTooltipPlacement('top');
+      }
+    }
+  }, [hoveredCategory]);
 
   const chartData = useMemo(() => {
     // Get period totals
@@ -41,8 +77,12 @@ export function HorizontalBalanceChart({
     // Collect income subcategories data
     const incomeSubcategoryTotals: Record<string, { amount: number; color: string; categoryName: string }> = {};
 
-    // Collect expense categories data
-    const expenseCategoryTotals: Record<string, { amount: number; color: string }> = {};
+    // Collect expense categories data with subcategories
+    const expenseCategoryTotals: Record<string, {
+      amount: number;
+      color: string;
+      subcategories: Record<string, { amount: number; name: string }>;
+    }> = {};
 
     // Iterate through monthlyData
     for (const [month, data] of monthlyData) {
@@ -87,25 +127,36 @@ export function HorizontalBalanceChart({
         }
       }
 
-      // Process expense categories
+      // Process expense categories with subcategories
       for (const [categoryId, categoryData] of Object.entries(data.expense)) {
         const category = categories.categories.expense.find((c) => c.id === categoryId);
         if (!category) continue;
-
-        let total = 0;
-        if (typeof categoryData === 'object' && categoryData !== null) {
-          total = Object.values(categoryData).reduce((sum, val) => sum + val, 0);
-        } else if (typeof categoryData === 'number') {
-          total = categoryData;
-        }
 
         if (!expenseCategoryTotals[categoryId]) {
           expenseCategoryTotals[categoryId] = {
             amount: 0,
             color: category.color,
+            subcategories: {},
           };
         }
-        expenseCategoryTotals[categoryId].amount += total;
+
+        if (typeof categoryData === 'object' && categoryData !== null) {
+          // Has subcategories
+          for (const [subId, amount] of Object.entries(categoryData)) {
+            const subcategory = category.subcategories?.find((s) => s.id === subId);
+            if (!expenseCategoryTotals[categoryId].subcategories[subId]) {
+              expenseCategoryTotals[categoryId].subcategories[subId] = {
+                amount: 0,
+                name: subcategory?.name || subId,
+              };
+            }
+            expenseCategoryTotals[categoryId].subcategories[subId].amount += amount;
+            expenseCategoryTotals[categoryId].amount += amount;
+          }
+        } else if (typeof categoryData === 'number') {
+          // No subcategories
+          expenseCategoryTotals[categoryId].amount += categoryData;
+        }
       }
     }
 
@@ -125,16 +176,26 @@ export function HorizontalBalanceChart({
       }))
       .sort((a, b) => b.value - a.value);
 
-    // Prepare expense segments
+    // Prepare expense segments with subcategories
     const expenseSegments: SegmentData[] = Object.entries(expenseCategoryTotals)
       .filter(([_, data]) => data.amount > 0)
       .map(([categoryId, data]) => {
         const category = categories.categories.expense.find((c) => c.id === categoryId);
+        const subcategories: SubcategoryData[] = Object.entries(data.subcategories)
+          .map(([subId, subData]) => ({
+            name: subData.name,
+            value: subData.amount,
+            percentage: data.amount > 0 ? (subData.amount / data.amount) * 100 : 0,
+          }))
+          .sort((a, b) => b.value - a.value);
+
         return {
           name: category?.name || categoryId,
           value: data.amount,
           color: data.color,
           percentage: totalExpense > 0 ? (data.amount / totalExpense) * 100 : 0,
+          categoryId,
+          subcategories: subcategories.length > 0 ? subcategories : undefined,
         };
       })
       .sort((a, b) => b.value - a.value);
@@ -155,7 +216,7 @@ export function HorizontalBalanceChart({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Income Bar */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -164,9 +225,9 @@ export function HorizontalBalanceChart({
             {formatCurrency(chartData.totalIncome)}
           </span>
         </div>
-        <div className="relative h-4 rounded-full bg-muted">
+        <div className="relative h-3 rounded-full bg-muted">
           <div
-            className="flex h-4 rounded-full overflow-hidden"
+            className="flex h-3 rounded-full overflow-hidden"
             style={{ width: `${chartData.incomeBarWidth}%` }}
           >
             {chartData.incomeSegments.map((segment, index) => (
@@ -216,9 +277,9 @@ export function HorizontalBalanceChart({
             {formatCurrency(chartData.totalExpense)}
           </span>
         </div>
-        <div className="relative h-4 rounded-full bg-muted">
+        <div className="relative h-3 rounded-full bg-muted">
           <div
-            className="flex h-4 rounded-full overflow-hidden"
+            className="flex h-3 rounded-full overflow-hidden"
             style={{ width: `${chartData.expenseBarWidth}%` }}
           >
             {chartData.expenseSegments.map((segment, index) => (
@@ -229,8 +290,23 @@ export function HorizontalBalanceChart({
                   width: `${segment.percentage}%`,
                   backgroundColor: segment.color,
                 }}
-                onMouseEnter={() => setHoveredSegment({ type: 'expense', index })}
-                onMouseLeave={() => setHoveredSegment(null)}
+                onMouseEnter={(e) => {
+                  setHoveredSegment({ type: 'expense', index });
+                  if (segment.categoryId && segment.subcategories) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredCategory({
+                      categoryId: segment.categoryId,
+                      name: segment.name,
+                      color: segment.color,
+                      subcategories: segment.subcategories,
+                      position: { x: rect.left + rect.width / 2, y: rect.top },
+                    });
+                  }
+                }}
+                onMouseLeave={() => {
+                  setHoveredSegment(null);
+                  setHoveredCategory(null);
+                }}
               />
             ))}
           </div>
@@ -247,6 +323,23 @@ export function HorizontalBalanceChart({
                   ? 'opacity-40'
                   : 'opacity-100'
               }`}
+              onMouseEnter={(e) => {
+                setHoveredSegment({ type: 'expense', index });
+                if (segment.categoryId && segment.subcategories) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredCategory({
+                    categoryId: segment.categoryId,
+                    name: segment.name,
+                    color: segment.color,
+                    subcategories: segment.subcategories,
+                    position: { x: rect.left + rect.width / 2, y: rect.bottom },
+                  });
+                }
+              }}
+              onMouseLeave={() => {
+                setHoveredSegment(null);
+                setHoveredCategory(null);
+              }}
             >
               <div
                 className="w-3 h-3 rounded-full"
@@ -259,6 +352,73 @@ export function HorizontalBalanceChart({
           ))}
         </div>
       </div>
+
+      {/* Tooltip with Pie Chart */}
+      {hoveredCategory && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={tooltipRef}
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${hoveredCategory.position.x}px`,
+            top: tooltipPlacement === 'top'
+              ? `${hoveredCategory.position.y - 10}px`
+              : `${hoveredCategory.position.y + 10}px`,
+            transform: tooltipPlacement === 'top'
+              ? 'translate(-50%, -100%)'
+              : 'translate(0%, -80%)',
+            maxHeight: '80vh',
+          }}
+        >
+          <div className="bg-card border border-border rounded-lg shadow-xl p-3 max-h-[80vh] overflow-y-auto">
+            <p className="text-sm font-semibold text-card-foreground">{hoveredCategory.name}</p>
+            <div className="w-48 h-38">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={hoveredCategory.subcategories.map((sub) => ({
+                      name: sub.name,
+                      value: sub.value,
+                    }))}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={60}
+                    innerRadius={30}
+                    stroke="var(--color-card)"
+                  >
+                    {hoveredCategory.subcategories.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={hoveredCategory.color}
+                        opacity={1 - index * 0.15}
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 space-y-1">
+              {hoveredCategory.subcategories.map((sub, index) => (
+                <div key={index} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor: hoveredCategory.color,
+                        opacity: 1 - index * 0.15,
+                      }}
+                    />
+                    <span className="text-muted-foreground">{sub.name}</span>
+                  </div>
+                  <span className="font-medium text-card-foreground">{sub.percentage.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
